@@ -1,0 +1,14 @@
+certifi~=2024.12.14
+pymongo[srv]==4.12.1
+pinecone[grpc]==6.0.2
+pinecone-client~=2.2.4
+openai~=1.77.0
+langchain~=0.3.25
+langchain-core~=0.3.59
+langchain-openai~=0.3.16
+typing_extensions~=4.13.2
+langgraph~=0.4.3
+pydantic~=2.11.4
+uuid~=1.30
+streamlit~=1.45.0
+python-dotenv~=1.1.0
