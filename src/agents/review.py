@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage
 from src.models.review import ReviewState
 from src.utils import llm
 from db import mongo
-from src.config import PromptTemplate, get_prompt_template, llm_model
+from config import PromptTemplate, get_prompt_template, llm_model
 
 # Nodes
 def get_client(state: ReviewState, config: RunnableConfig):
