@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from pinecone import Pinecone, ServerlessSpec
 
-from config import mongo_info, pinecone_info
+from src.config import mongo_info, pinecone_info
 
 
 try:
