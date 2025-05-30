@@ -1,24 +1,24 @@
 import copy, json
 import datetime
 from dotenv import load_dotenv
-load_dotenv('./../../.env')
+load_dotenv('.env')
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from langgraph.config import get_stream_writer
-from langchain_core.messages import AIMessage
-from db import mongo
+from langchain_core.messages import AIMessage, HumanMessage
+from db import mongo, pinecone
 
-from config import PromptTemplate, get_prompt_template, llm_model
+from config import PromptTemplate, get_prompt_template, llm_model, pinecone_info
 from src.agents.global_func import func_get_client, func_get_project, func_get_reviews, func_get_tasks, \
     func_process_task, func_get_response
-from src.models.task import TaskGenState, TaskState, Task
+from src.models.general import GeneralState, TaskState, Tools, Tools_, ToolState, MongoFilter, MongoAggregation, PineconeQuery
 from src.utils import llm
 
 
 # Nodes
-def get_client(state: TaskGenState, config: RunnableConfig):
+def get_client(state: GeneralState, config: RunnableConfig):
     client = func_get_client(state['clientId'], agent="task_gen")
     data = list(mongo.find({ 'type': "client_spec", 'client': "009", 'from': "Slite", 'content': {'$ne': ""} }))
     client_spec = ''
@@ -32,24 +32,24 @@ def get_client(state: TaskGenState, config: RunnableConfig):
 
     return { 'clientId': client['clientId'], 'client_spec': summary }
 
-def get_project(state: TaskGenState, config: RunnableConfig):
+def get_project(state: GeneralState, config: RunnableConfig):
     return func_get_project(state['clientId'], agent="task_gen")
 
-def get_reviews(state: TaskGenState, config: RunnableConfig):
+def get_reviews(state: GeneralState, config: RunnableConfig):
     return func_get_reviews(state['clientId'], agent="task_gen")
 
-def get_tasks(state: TaskGenState, config: RunnableConfig):
+def get_tasks(state: GeneralState, config: RunnableConfig):
     return func_get_tasks(state['clientId'], agent="task_gen")
 
 def process_task(state: TaskState, config: RunnableConfig):
     return func_process_task(state['task'], agent="task_gen")
 
-def synthesizer(state: TaskGenState, config: RunnableConfig):
+def synthesizer(state: GeneralState, config: RunnableConfig):
     return {}
 
-def get_query(state: TaskGenState, config: RunnableConfig):
+def get_tools(state: GeneralState, config: RunnableConfig):
     ## Process context data
-    today, project, weekly_reviews, monthly_reviews, completed_tasks, active_tasks = func_get_response(state, "task_gen")
+    today, project, weekly_reviews, monthly_reviews, completed_tasks, active_tasks = func_get_response(state, "general")
 
     project = json.dumps(project, indent=4)
 
@@ -63,10 +63,9 @@ def get_query(state: TaskGenState, config: RunnableConfig):
     completed_tasks = json.dumps(completed_tasks[max(0, len(weekly_reviews) - 100):], indent=4)
     active_tasks = json.dumps(active_tasks, indent=4)
 
-    prompt = get_prompt_template(PromptTemplate.TASK_GEN)
+    prompt = get_prompt_template(PromptTemplate.TOOL_GEN)
     prompt = prompt.format(
         today=today,
-        description=state['description'],
         client_spec=state['client_spec'],
         project_data=project,
         weekly_reviews=weekly,
@@ -74,26 +73,173 @@ def get_query(state: TaskGenState, config: RunnableConfig):
         completed_tasks=completed_tasks,
         active_tasks=active_tasks,
     )
-    task = llm.responses.parse(
-        model=llm_model["task"],
+    
+    # Create a corrected schema for OpenAI API
+    tools_schema = copy.deepcopy(Tools_)
+    
+    # Add additionalProperties: false to the root schema
+    tools_schema["additionalProperties"] = False
+    
+    # Fix all additionalProperties issues for OpenAI API
+    if "$defs" in tools_schema:
+        # Fix all definitions to have additionalProperties: false
+        for def_name, def_schema in tools_schema["$defs"].items():
+            if def_schema.get("type") == "object":
+                def_schema["additionalProperties"] = False
+        
+        # Fix MongoAggregation pipeline items
+        if "MongoAggregation" in tools_schema["$defs"]:
+            if "properties" in tools_schema["$defs"]["MongoAggregation"] and "pipeline" in tools_schema["$defs"]["MongoAggregation"]["properties"]:
+                tools_schema["$defs"]["MongoAggregation"]["properties"]["pipeline"]["items"]["additionalProperties"] = False
+        
+        # Fix MongoFilter filter object
+        if "MongoFilter" in tools_schema["$defs"]:
+            if "properties" in tools_schema["$defs"]["MongoFilter"] and "filter" in tools_schema["$defs"]["MongoFilter"]["properties"]:
+                tools_schema["$defs"]["MongoFilter"]["properties"]["filter"]["additionalProperties"] = False
+            # Fix sort items
+            if "properties" in tools_schema["$defs"]["MongoFilter"] and "sort" in tools_schema["$defs"]["MongoFilter"]["properties"]:
+                tools_schema["$defs"]["MongoFilter"]["properties"]["sort"]["items"]["additionalProperties"] = False
+        
+        # Fix PineconeQuery meta_filter
+        if "PineconeQuery" in tools_schema["$defs"]:
+            if "properties" in tools_schema["$defs"]["PineconeQuery"] and "meta_filter" in tools_schema["$defs"]["PineconeQuery"]["properties"]:
+                if "anyOf" in tools_schema["$defs"]["PineconeQuery"]["properties"]["meta_filter"]:
+                    for item in tools_schema["$defs"]["PineconeQuery"]["properties"]["meta_filter"]["anyOf"]:
+                        if item.get("type") == "object" and "additionalProperties" in item:
+                            item["additionalProperties"] = False
+    
+    # Wrap the schema in the expected OpenAI format
+    openai_schema = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "tools_response",
+            "schema": tools_schema,
+            "strict": True
+        }
+    }
+    
+    tools = llm.responses.parse(
+        model=llm_model["query"],
+        input=[{
+            'role': 'developer',
+            'content': prompt,
+        }, {
+            'role': 'user',
+            'content': state['messages'][-1].content
+        }],
+        text_format=openai_schema
+    ).output_parsed
+
+    return {'tools': tools}
+
+def mongo_filter(state: ToolState):
+    tool = state['tool']
+    if not isinstance(tool, MongoFilter):
+        return {}
+
+    result = mongo.collection.find(tool.filter)
+    if len(tool.sort):
+        result = result.sort(tool.sort)
+    result = result.limit(tool.limit)
+    result = list(result)
+    for el in result:
+        if 'from' in el and el['from'] == 'Slite' and 'sections' in el:
+            del el['sections']
+
+    return {
+        'datas': [{
+            'purpose': tool.purpose,
+            'result': list(result)
+        }]
+    }
+
+def mongo_aggregation(state: ToolState):
+    tool = state['tool']
+    if not isinstance(tool, MongoAggregation):
+        return {}
+
+    result = mongo.collection.aggregate(tool.pipeline)
+
+    return {
+        'datas': [{
+            'purpose': tool.purpose,
+            'result': list(result)
+        }]
+    }
+
+def pinecone_search(state: ToolState):
+    tool = state['tool']
+    if not isinstance(tool, PineconeQuery):
+        return {}
+
+    embedding = llm.embeddings.create(
+        input=tool.query,
+        model=llm_model['embedding'],
+    ).data[0].embedding
+    results = pinecone.indexModel.query(
+        vector=embedding,
+        filter=tool.meta_filter,
+        top_k=tool.top_k,
+        include_metadata=True,
+        namespace=pinecone_info['env']
+    )
+
+    return {
+        'datas': [{
+            'purpose': tool.purpose,
+            'result': results.get("matches", [])
+        }]
+    }
+
+def get_response(state: GeneralState, config: RunnableConfig):
+    today = datetime.date.today().strftime('%Y-%m-%d')
+
+    project = copy.deepcopy(state['project'])
+    project['created_at'] = project['created_at'].strftime("%Y-%m-%d %H:%M:%S")
+    project['modified_at'] = project['modified_at'].strftime("%Y-%m-%d %H:%M:%S")
+    if project['due_on']:
+        project['due_on'] = project['due_on'].strftime("%Y-%m-%d %H:%M:%S")
+    if project['due_date']:
+        project['due_date'] = project['due_date'].strftime("%Y-%m-%d %H:%M:%S")
+
+    prompt = get_prompt_template(PromptTemplate.GENERAL_RESPONSE)
+    prompt = prompt.format(
+        today=today,
+        client_spec=state['client_spec'],
+        project_data=project,
+        datas=json.dumps(state['datas'], indent=4),
+    )
+
+    writer = get_stream_writer()
+    stream = llm.responses.create(
+        model=llm_model["general"],
         input=[{
             'role': 'developer',
             'content': prompt,
         }],
-        text_format=Task
-    ).output_parsed
-
-    return {}
+        stream=True,
+    )
+    final_text = ''
+    for event in stream:
+        if event.type == 'response.output_text.delta':
+            final_text += event.delta
+            writer({'delta': event.delta})
+    return {
+        'messages': [AIMessage(content=final_text)],
+    }
 
 
 # Conditional Edges
-def continue_to_task(state: TaskGenState, config: RunnableConfig):
+def continue_to_task(state: GeneralState, config: RunnableConfig):
     return [Send('process_task', {'task': task}) for index, task in enumerate(state['raw_tasks'])]
+
+def continue_to_tool(state: GeneralState, config: RunnableConfig):
+    return [Send(tool.tool, {'tool': tool.param}) for index, tool in enumerate(state['tools'])]
 
 
 # Setup Graph
 def setup_graph():
-    graph_builder = StateGraph(TaskGenState)
+    graph_builder = StateGraph(GeneralState)
 
     graph_builder.add_node(get_client)
     graph_builder.add_node(get_project)
@@ -101,7 +247,11 @@ def setup_graph():
     graph_builder.add_node(get_tasks)
     graph_builder.add_node(process_task)
     graph_builder.add_node(synthesizer)
-    graph_builder.add_node(get_query)
+    graph_builder.add_node(get_tools)
+    graph_builder.add_node(mongo_filter)
+    graph_builder.add_node(mongo_aggregation)
+    graph_builder.add_node(pinecone_search)
+    graph_builder.add_node(get_response)
 
     graph_builder.add_edge(START, 'get_client')
     graph_builder.add_edge(START, 'get_project')
@@ -112,7 +262,11 @@ def setup_graph():
     graph_builder.add_edge('get_reviews', 'synthesizer')
     graph_builder.add_edge('get_tasks', 'synthesizer')
     graph_builder.add_conditional_edges('synthesizer', continue_to_task, {'process_task': 'process_task'})
-    graph_builder.add_edge('process_task', 'get_query')
+    graph_builder.add_edge('process_task', 'get_tools')
+    graph_builder.add_conditional_edges('get_tools', continue_to_tool, ["mongo_filter", "mongo_aggregation", "pinecone_search"])
+    graph_builder.add_edge('mongo_filter', 'get_response')
+    graph_builder.add_edge('mongo_aggregation', 'get_response')
+    graph_builder.add_edge('pinecone_search', 'get_response')
     
     graph_builder.add_edge('get_response', END)
 
@@ -120,26 +274,20 @@ def setup_graph():
 
 
 if __name__ == '__main__':
+    try:
+        graph = setup_graph().compile()  # graph is compiled in setup_graph now
+        code = graph.get_graph().draw_mermaid()
 
-    graph = setup_graph().compile()  # graph is compiled in setup_graph now
-    code = graph.get_graph().draw_mermaid()
-    print(code)
+        initial_state = {
+            "clientId": "009",
+            "messages": [HumanMessage(content="How many tasks are belong to user?")]
+        }
 
-    initial_state = {
-        "clientId": "009",
-        "description": "Create a task for the client to complete.",
-    }
-
-    # Stream with configuration to see full state updates
-    configuration = {"recursion_limit": 100, "configurable": {"thread_id": "test-thread"}}
-    for event_part in graph.stream(initial_state, config=configuration, stream_mode="updates"):
-        # event_part is a dictionary where keys are node names and values are their output
-        print(f"--- Graph Update ---")
-        for node_name, output in event_part.items():
-            print(f"Node '{node_name}'")
-            # if node_name == "process_task" and "tasks" in output:
-            #     print(f"  ^^^ process_task produced tasks, this should trigger accumulator.")
-        # To see the full state after each update, you'd need to inspect the graph's internal state
-        # or rely on the final event from get_response.
-
-    print("\n--- Final state (from a final invocation if needed, or inspect last event) ---")
+        # Stream with configuration to see full state updates
+        configuration = {"recursion_limit": 100, "configurable": {"thread_id": "test-thread"}}
+        for chunk in graph.stream(initial_state, config=configuration, stream_mode="custom"):
+            print(chunk['delta'], end='')
+    except Exception as e:
+        print(f"Error occurred: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()

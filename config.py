@@ -16,7 +16,10 @@ pinecone_info = {
 llm_model = {
     'review': 'gpt-4o',
     'task': 'gpt-4o',
-    'summarize': 'gpt-4.1-nano'
+    'summarize': 'gpt-4.1-nano',
+    'query': 'gpt-4o',
+    'general': 'gpt-4o',
+    'embedding': 'text-embedding-3-small',
 }
 
 class PromptTemplate(Enum):
@@ -25,6 +28,8 @@ class PromptTemplate(Enum):
     TASK_INFO_GEN = "task_generation_info.md"
     TASK_GEN = "task_generation_instance.md"
     CLIENT_SUMMARIZE = "client_summarize.md"
+    GENERAL_RESPONSE = "general_response.md"
+    TOOL_GEN = "query_generation.md"
 
 
 def get_prompt_template(prompt_template: PromptTemplate):
