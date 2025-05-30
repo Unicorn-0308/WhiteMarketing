@@ -4,7 +4,7 @@ from typing import Annotated, TypedDict, List, Dict, Any, Optional
 from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 
-class ReviewState(TypedDict):
+class ReviewGenState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     clientId: str
     client: Dict[str, Any]

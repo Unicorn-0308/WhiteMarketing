@@ -1,11 +1,8 @@
 # app.py
 import streamlit as st
-from src.agents.review import setup_graph # Assuming your script is langgraph_agent.py
-# If ReviewState is used for type hinting or direct instantiation, import it too.
-# from langgraph_agent import ReviewState
-
-import nest_asyncio
-nest_asyncio.apply()
+from src.agents.review_agent import setup_graph # Assuming your script is langgraph_agent.py
+# If ReviewGenState is used for type hinting or direct instantiation, import it too.
+# from langgraph_agent import ReviewGenState
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -13,37 +10,6 @@ st.set_page_config(
     page_title="LangGraph Review Agent",
     page_icon="📄"
 )
-
-# --- Styling (Optional - for a "beautiful" look) ---
-# st.markdown("""
-#     <style>
-#     .stApp {
-#         background-color: #f0f2f6; /* Light grey background */
-#     }
-#     .stButton>button {
-#         background-color: #4CAF50; /* Green */
-#         color: white;
-#         border-radius: 8px;
-#         padding: 10px 24px;
-#         text-align: center;
-#         text-decoration: none;
-#         display: inline-block;
-#         font-size: 16px;
-#         margin: 4px 2px;
-#         transition-duration: 0.4s;
-#         cursor: pointer;
-#         border: none;
-#     }
-#     .stButton>button:hover {
-#         background-color: white;
-#         color: black;
-#         border: 2px solid #4CAF50;
-#     }
-#     .stSelectbox div[data-baseweb="select"] > div {
-#         background-color: #e8f0fe; /* Light blue for selectbox */
-#     }
-#     </style>
-# """, unsafe_allow_html=True)
 
 # --- Title and Description ---
 st.title("📄 AI-Powered Review Generation Agent")
@@ -97,10 +63,10 @@ if run_button:
 
                 # Invoke the graph
                 # Your graph nodes expect a RunnableConfig, but LangGraph passes it implicitly.
-                # If you needed to pass specific config elements, you'd do it here:
+                # If you needed to pass specific configuration elements, you'd do it here:
                 # from langchain_core.runnables import RunnableConfig
-                # config = RunnableConfig(configurable={"thread_id": "some_thread_id"})
-                # final_state = compiled_graph.invoke(initial_state, config=config)
+                # configuration = RunnableConfig(configurable={"thread_id": "some_thread_id"})
+                # final_state = compiled_graph.invoke(initial_state, configuration=configuration)
 
                 stream = compiled_graph.stream(initial_state, stream_mode='custom')
                 report_content = ''
