@@ -47,7 +47,7 @@ def process_task(state: TaskState, config: RunnableConfig):
 def synthesizer(state: TaskGenState, config: RunnableConfig):
     return {}
 
-def get_response(state: TaskGenState, config: RunnableConfig):
+def get_query(state: TaskGenState, config: RunnableConfig):
     ## Process context data
     today, project, weekly_reviews, monthly_reviews, completed_tasks, active_tasks = func_get_response(state, "task_gen")
 
@@ -129,7 +129,7 @@ def setup_graph():
     graph_builder.add_node(get_tasks)
     graph_builder.add_node(process_task)
     graph_builder.add_node(synthesizer)
-    graph_builder.add_node(get_response)
+    graph_builder.add_node(get_query)
 
     graph_builder.add_edge(START, 'get_client')
     graph_builder.add_edge(START, 'get_project')
@@ -140,7 +140,8 @@ def setup_graph():
     graph_builder.add_edge('get_reviews', 'synthesizer')
     graph_builder.add_edge('get_tasks', 'synthesizer')
     graph_builder.add_conditional_edges('synthesizer', continue_to_task, {'process_task': 'process_task'})
-    graph_builder.add_edge('process_task', 'get_response')
+    graph_builder.add_edge('process_task', 'get_query')
+    
     graph_builder.add_edge('get_response', END)
 
     return graph_builder

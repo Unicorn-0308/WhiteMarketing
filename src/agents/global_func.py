@@ -1,3 +1,4 @@
+import datetime, json, copy
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -112,7 +113,7 @@ def func_process_task(task, agent: str="review_gen"):
         for story in task['stories']:
             story_text += f"Story at: {story['created_at'].strftime('%Y-%m-%d %H:%M:%S')} by {story['created_by']['name'] if story['created_by'] else 'Nobody'}\n{story['text'] if 'text' in story else ''}\n\n"
         summary = llm.chat.completions.create(
-            model=llm_model['story_summarize'],
+            model=llm_model['summarize'],
             messages=[{"role": "system", "content": get_prompt_template(PromptTemplate.STORY_SUMMARIZE).format(stories=story_text)}]
         ).choices[0].message.content
         task['stories'] = summary
@@ -122,3 +123,46 @@ def func_process_task(task, agent: str="review_gen"):
     return {
         'tasks': [task]
     }
+
+def func_get_response(state, agent: str="review_gen"):
+    today = datetime.date.today().strftime('%Y-%m-%d')
+
+    project = copy.deepcopy(state['project'])
+    project['created_at'] = project['created_at'].strftime("%Y-%m-%d %H:%M:%S")
+    project['modified_at'] = project['modified_at'].strftime("%Y-%m-%d %H:%M:%S")
+    if project['due_on']:
+        project['due_on'] = project['due_on'].strftime("%Y-%m-%d %H:%M:%S")
+    if project['due_date']:
+        project['due_date'] = project['due_date'].strftime("%Y-%m-%d %H:%M:%S")
+
+    weekly_reviews = copy.deepcopy(state['weekly'])
+    monthly_reviews = copy.deepcopy(state['monthly'])
+    for group in [weekly_reviews, monthly_reviews]:
+        for review in group:
+            review['updatedAt'] = review['updatedAt'].strftime("%Y-%m-%d %H:%M:%S")
+            if review['date'] != '':
+                review['date'] = review['date'].strftime("%Y-%m-%d")
+
+
+    tasks = copy.deepcopy(state['tasks'])
+    tasks = sorted(tasks, key=lambda item: item['created_at'])
+    for task in tasks:
+        for date in ["created_at", "completed_at", "due_on", "due_date", "modified_at"]:
+            if date in task and task[date] is not None:
+                try:
+                    task[date] = task[date].strftime("%Y-%m-%d %H:%M:%S")
+                except Exception as e:
+                    print(date, task[date])
+        try:
+            json.dumps(task)
+        except Exception as e:
+            print(e, task)
+    completed_tasks = []
+    active_tasks = []
+    for task in tasks:
+        if task['completed']:
+            completed_tasks.append(task)
+        else:
+            active_tasks.append(task)
+
+    return today, project, weekly_reviews, monthly_reviews, completed_tasks, active_tasks

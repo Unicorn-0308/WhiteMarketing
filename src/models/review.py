@@ -5,7 +5,6 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 
 class ReviewGenState(TypedDict):
-    messages: Annotated[List[BaseMessage], add_messages]
     clientId: str
     client: Dict[str, Any]
     project: Dict[str, Any]

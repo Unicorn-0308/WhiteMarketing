@@ -5,9 +5,8 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from langgraph.config import get_stream_writer
-from langchain_core.messages import AIMessage
 
-from src.agents.global_func import func_get_client, func_get_project, func_get_reviews, func_get_tasks, func_process_task
+from src.agents.global_func import func_get_client, func_get_project, func_get_reviews, func_get_tasks, func_process_task, func_get_response
 from src.models.review import ReviewGenState, TaskState
 from src.utils import llm
 from db import mongo
@@ -35,54 +34,23 @@ def synthesizer(state: ReviewGenState, config: RunnableConfig):
 
 def get_response(state: ReviewGenState, config: RunnableConfig):
     ## Process context data
-    today = datetime.date.today().strftime('%Y-%m-%d')
-    client = json.dumps(state['client'], indent=4)
+    today, project, weekly_reviews, monthly_reviews, completed_tasks, active_tasks = func_get_response(state, "review_gen")
 
-    project = copy.deepcopy(state['project'])
-    project['created_at'] = project['created_at'].strftime("%Y-%m-%d %H:%M:%S")
-    project['modified_at'] = project['modified_at'].strftime("%Y-%m-%d %H:%M:%S")
-    if project['due_on']:
-        project['due_on'] = project['due_on'].strftime("%Y-%m-%d %H:%M:%S")
-    if project['due_date']:
-        project['due_date'] = project['due_date'].strftime("%Y-%m-%d %H:%M:%S")
+    client = json.dumps(state['client'], indent=4)
     project = json.dumps(project, indent=4)
 
-    weekly_reviews = copy.deepcopy(state['weekly'])
-    monthly_reviews = copy.deepcopy(state['monthly'])
     weekly = ''
+    for review in weekly_reviews:
+        weekly += f"Weekly Review on {review['date']}\n{json.dumps(review, indent=4)}\n"
     monthly = ''
-    for group in [weekly_reviews, monthly_reviews]:
-        for review in group:
-            review['updatedAt'] = review['updatedAt'].strftime("%Y-%m-%d %H:%M:%S")
-            if review['date'] != '':
-                review['date'] = review['date'].strftime("%Y-%m-%d")
-            weekly += f"{'Weekly' if review['type'] == 'weekly' else 'Monthly'} Review on {review['date']}\n{json.dumps(review, indent=4)}\n"
-            del review['type']
+    for review in monthly_reviews:
+        monthly += f"Monthly Review on {review['date']}\n{json.dumps(review, indent=4)}\n"
 
-    tasks = copy.deepcopy(state['tasks'])
-    tasks = sorted(tasks, key=lambda item: item['created_at'])
-    for task in tasks:
-        for date in ["created_at", "completed_at", "due_on", "due_date", "modified_at"]:
-            if date in task and task[date] is not None:
-                try:
-                    task[date] = task[date].strftime("%Y-%m-%d %H:%M:%S")
-                except Exception as e:
-                    print(date, task[date])
-        try:
-            json.dumps(task)
-        except Exception as e:
-            print(e, task)
-    completed_tasks = []
-    active_tasks = []
-    for task in tasks:
-        if task['completed']:
-            completed_tasks.append(task)
-        else:
-            active_tasks.append(task)
     completed_tasks = json.dumps(completed_tasks[max(0, len(completed_tasks) - 20):], indent=4)
     active_tasks = json.dumps(active_tasks, indent=4)
 
-    prompt = get_prompt_template(PromptTemplate.REVIEW_GEN).format(
+    prompt = get_prompt_template(PromptTemplate.REVIEW_GEN)
+    prompt = prompt.format(
         today=today,
         client_data=client,
         project_data=project,
@@ -106,7 +74,7 @@ def get_response(state: ReviewGenState, config: RunnableConfig):
         if event.type == 'response.output_text.delta':
             final_text += event.delta
             writer({'delta': event.delta, 'position': 'final_response'})
-    return {'messages': [AIMessage(final_text)]}
+    return {}
 
 # Conditional Edges
 def continue_to_task(state: ReviewGenState, config: RunnableConfig):
@@ -149,7 +117,6 @@ if __name__ == '__main__':
     print(code)
 
     initial_state = {
-        "messages": [{"role": "user", "content": "Hello!"}],
         "clientId": "179",
         "tasks": [],
     }

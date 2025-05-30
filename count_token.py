@@ -71,7 +71,7 @@ if run_button:
         else:
             st.session_state.last_count = "No report content found in the agent's response."
             st.error("Failed to generate report: No messages found in the output state.")
-        # st.rerun()
+        st.rerun()
     else:
         st.warning("Please select a Model name.")
 
