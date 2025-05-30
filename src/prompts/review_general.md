@@ -56,139 +56,44 @@ Today is **{{today}}** and you have to give one specific client a new Review on 
 
 ## General Guidelines
 This is General Guidelines to build Weekly or Monthly Review.
+This outlines two key client review processes: a Weekly Review and a Monthly Review, designed to enhance project coordination, client communication, and strategic progress.
 
-<WeeklyReviewProcess>
+**Weekly Review Process (approx. 1 hour or less):**
 
-### Expected Time Required:
+*   **Purpose:** Essential for top-notch project coordination, monitoring, progress, and client communication. Aims to deliver actionable insights, build client trust, and guide strategic decisions efficiently. The preparation itself forms an action plan for the upcoming week.
+*   **Document Structure:**
+    1.  **Highlight Section:** An engaging main point to capture attention and spark discussion.
+    2.  **General KPI Section:** Goes beyond presenting KPIs to *analyze* changes (1-2 key findings weekly), suggest solutions/tests, and tailor content with different focuses each week.
+    3.  **Next Steps:** Mostly planned before the call, with additions during the meeting.
+    4.  **Last Week's Focus:** A backlog for quick review or deeper dives.
+    5.  **Post-Call Project Management:** 15 minutes allocated after calls to convert next steps into Asana tasks with details.
+*   **Process:**
+    *   Consultant completes the client's review card (a copy of the last update, reworked) *before* the weekly client meeting.
+    *   Responsibilities are documented if multiple team members are involved.
+    *   Project Lead reviews and adds "Verified" status in Slite by week's end, but **approval is NOT required before sending to the client.**
+*   **Sharing with Client:**
+    *   Options (per Client Updated PM Matrix):
+        *   **PDF:** Simplest option.
+        *   **Slite Link to Collection:** Share the *entire* "Weekly Reviews" collection with client emails as "Guests" (Reader access only). Name the collection with "[EXT]".
+    *   **Very Important Security Notes:**
+        *   Share only as "Reader," not inviting to the entire workspace.
+        *   Avoid public links for large spending clients due to data breach risks (requires mentor approval).
+        *   When sharing via individual emails, clients *can* see comments (even resolved ones). Public links hide resolved comments.
+*   **Recommendation:** Fill the Slite card with insights as they arise.
 
-⏰ Generally around **1 hour or less**, but it can be adjusted based on the specific needs of each client. The goal is to provide valuable insights efficiently, avoiding too long prep time (e.g., half a day).
+**Monthly Review Process (30-45 mins max):**
 
-**\*\***💡\*\* In order to achieve top-notch project coordination, monitoring, and substantial progress, it is essential for our team to engage in weekly coordination on all clients. This will also enhance external communication and ensure accurate updates are provided to our clients.
-
----
-
-### 📄 Weekly Review Document
-
-#### Document Structure
-
-1. **Highlight Section **
-
-   - Begin with the main highlight of the week to immediately capture attention.
-   - Making it engaging, trigger discussions, ask for feedback, or suggest new approaches.
-
-1. **General KPI Section **
-
-   - Make It Engaging: **Go beyond just presenting KPIs**—<u>analyze</u> why they’ve changed and suggest solutions or testing scenarios.
-   - Limit to 1-2 key findings weekly.
-   - Determine before which points you want to highlight and discuss with the clients. Make them visible (e.g. bold) to help yourself during the call.
-   - Tailor every weekly document with <u>different focuses, graphs, and screenshots</u>. Strive for new insights and opportunities of improvement each week.
-   - Start with a quick overview of overall performance (2-3 mins), followed by different analysis. Here you can find examples of which analyses you can use.
-
----
-
-1. **Next Steps **⏩
-
-- With the new approach you can already plan most next steps before the call.
-- Eventually add additional next steps which were discussed during the meeting.
-
----
-
-1. **Last Week's Focus **⏪
-
-- Use this as a backlog: Quickly review it when time is limited, or dive deeper if time allows.
-
-1. **Post-Call Project Management **👨‍💻
-
-- Make it part of the process to plan 15 mins after every call to turn all next steps into an Asana task. Add deadlines, project manager, and other necessary information.
-
-#### Purpose
-
-The purpose of this structure is to add as much value during the weekly calls with the client as possible:
-
-- **Deliver Actionable Insights**: <u>Analyze</u> data, show challenges + solutions and highlight achievements ; build trust through transparency.
-- **Client Engagement & Trust**: Ensure every call is valuable, strengthening client trust and relationships.
-- **Strategic Decisions & Optimization**: Provide clear, data-driven recommendations for improved client performance.
-- Preparation time is used effectively to create an **action plan for your upcoming week**.
-
-### Process:
-
-- Consultant completes every client's card **before the weekly meeting with the client.**
-  - Make a copy of the last weekly update for the client.
-  - Rework and complete all sections.
-  - When multiple team members are involved in working with the same client, the allocation of filling responsibilities will be determined and must be added to the description of the "Weekly Reviews" doc for each client (e.g. [Weekly Reviews](https://slite.com/api/public/notes/oV0WBoWfHwF0XX/redirect) ) and in the [Client Updates PM Matrix](https://slite.com/api/public/notes/YZBvpcpt8nKxPE/redirect)
-- Project Lead will review each client's weekly update, provide feedback if needed, and add the "Verified" status in Slite by the end of each week.  
-  **The approval is not a requirement before sending to the client!**
-
-### How to Share with the Client:
-
-Check the [Client Updated PM Matrix](https://slite.com/api/public/notes/YZBvpcpt8nKxPE/redirect) to see the determined sharing options for each client, and share accordingly.
-
-**Option 1**: share as PDF → this option is the simplest and does not require any particular
-
-**Option 2**: share link to collection. If you want to use this option, you need to:
-
-1. Share the entire "Weekly Reviews" collection of the client with the client's email(s) as "Guests":
-
-![image.png](https://slite.com/api/files/Hs0b4jcHIpSZNI/image.png?apiToken=eyJhbGciOiJIUzI1NiIsImtpZCI6IjIwMjMtMDUtMDQifQ.eyJzY29wZSI6Im5vdGUtZXhwb3J0IiwibmlkIjoiWFYtTmdlbjhYRndXUTAiLCJpYXQiOjE3NDc3NDA2MDUsImlzcyI6Imh0dHBzOi8vc2xpdGUuY29tIiwianRpIjoicm1YWnRfdF9aWFd6THYiLCJleHAiOjE3NTAzMzI2MDV9.oPXF31KUwkw_ADyuL-T41Cye7CihvwWRij__Fa3meHc)
-
-![image.png](https://slite.com/api/files/QrLHTEXZToOXWP/image.png?apiToken=eyJhbGciOiJIUzI1NiIsImtpZCI6IjIwMjMtMDUtMDQifQ.eyJzY29wZSI6Im5vdGUtZXhwb3J0IiwibmlkIjoiWFYtTmdlbjhYRndXUTAiLCJpYXQiOjE3NDc3NDA2MDUsImlzcyI6Imh0dHBzOi8vc2xpdGUuY29tIiwianRpIjoicm1YWnRfdF9aWFd6THYiLCJleHAiOjE3NTAzMzI2MDV9.oPXF31KUwkw_ADyuL-T41Cye7CihvwWRij__Fa3meHc)
-
-1. Important! As we can share only 1 item with each email, we need to share the entire "Weekly Reviews" collection. Otherwise, if we share only 1 weekly update document, the next week we would not be able to share the new one (because it would be counted as a 2<sup>nd</sup> item). Hence we need to share the entire collection, which will include all present and future weekly updates.
-1. Add "[EXT]" to the name of the "Weekly Reviews" section of the client, so we know that the section is shared externally.
-1. ☠️ <mark>**VERY VERY IMPORTANT**</mark> ☠️ : We should share only as a reader, and not invite to the entire workspace!
-
-![image.png](https://slite.com/api/files/9fyA81fMZURb-V/image.png?apiToken=eyJhbGciOiJIUzI1NiIsImtpZCI6IjIwMjMtMDUtMDQifQ.eyJzY29wZSI6Im5vdGUtZXhwb3J0IiwibmlkIjoiWFYtTmdlbjhYRndXUTAiLCJpYXQiOjE3NDc3NDA2MDUsImlzcyI6Imh0dHBzOi8vc2xpdGUuY29tIiwianRpIjoicm1YWnRfdF9aWFd6THYiLCJleHAiOjE3NTAzMzI2MDV9.oPXF31KUwkw_ADyuL-T41Cye7CihvwWRij__Fa3meHc)
-
-1.  ☠️ <mark>**VERY VERY IMPORTANT**</mark> ☠️ : we should not use the public link functionality for large spending clients, as this can lead to data breaches, as anybody with the link can access the data.  
-    To use the public link functionality, please get approval from your mentor 1st:
-
-![image.png](https://slite.com/api/files/Y3-rIN8EDLyVYW/image.png?apiToken=eyJhbGciOiJIUzI1NiIsImtpZCI6IjIwMjMtMDUtMDQifQ.eyJzY29wZSI6Im5vdGUtZXhwb3J0IiwibmlkIjoiWFYtTmdlbjhYRndXUTAiLCJpYXQiOjE3NDc3NDA2MDUsImlzcyI6Imh0dHBzOi8vc2xpdGUuY29tIiwianRpIjoicm1YWnRfdF9aWFd6THYiLCJleHAiOjE3NTAzMzI2MDV9.oPXF31KUwkw_ADyuL-T41Cye7CihvwWRij__Fa3meHc)
-
-1. ⚠️ <mark>**VERY IMPORTANT**</mark>\*\* \*\*⚠️: when we share the files with individual emails, the client can see comments, including the resolved ones if they go looking for them! So it is recommended to use comments to improve weeklies, but use them wisely.  
-   With the public links, resolved comments can't be seen.
-
-### Recommendation:
-
-- As soon as you start working on a project, or if you see meaningful insights during your optimisation, fill the Slite card right away.
-
-</WeeklyReviewProcess>
-
-<MonthlyReviewProcess>
-
-### Process Overview:
-
-Sharing monthly updates with clients fosters transparency, accountability, client satisfaction, and strengthens relationships.
-
-It keeps clients informed, engaged, and allows for real-time adaptation, demonstrating expertise, and promoting loyalty.
-
-To avoid repeating information, the monthly review <mark>**should not**</mark> follow the same approach as the weekly review.
-
-While the weekly updates mainly cover operational aspects and action items, the monthly review should focus on medium-term goals and considerations. When preparing this update, we should take a step back and analyze KPIs and progress over a longer period of time, which means:
-
-- **Longer KPI time frames **(i.e. MoM and not WoW).
-- **Less detailed action points** (i.e. not "optimise negatives of campaign XYZ", but more "focus on Quality Score and relevancy improvement".
-- **Non-tactical considerations** (i.e. how to improve communication and processes, how to avoid mistakes etc).
-
-**<mark>The monthly review should "feed" the weekly updates.</mark>**
-
-Meaning that to give meaning and continuity to our work, when preparing our weekly updates we should look into our previous month's monthly review, to make sure we follow the mid-term goals we ourselves set 😁
-
-### Expected Time Required:
-
-⏰ 30-45 minutes maximum per client, monthly.
-
-We should not overthink it, nor making it too long. And of course, copy from other clients' updates whenever we can 😉
-
-### Process:
-
-- Fill internally by the **3rd of each month**:
-  - Choose the card with your name among the list, and open in new tabs all the clients you manage.
-  - Complete all sections.
-- Project Lead will review each client's monthly update, provide feedback if needed.
-- Share link by the** 5th of the month** to all clients once the Project Lead has reviewed and shared approval.
-- If an additional format is needed, link the slides or doc to Slite.
-
-</MonthlyReviewProcess>
+*   **Purpose:** Fosters transparency, accountability, client satisfaction, and strengthens relationships by keeping clients informed on medium-term goals.
+*   **Key Difference from Weekly:** It **should not** repeat weekly operational details. Instead, it focuses on:
+    *   Longer KPI timeframes (Month-over-Month).
+    *   Less detailed, more strategic action points.
+    *   Non-tactical considerations (e.g., process improvements, communication).
+*   **Relationship to Weekly:** The monthly review "feeds" the weekly updates, ensuring weekly work aligns with set mid-term goals.
+*   **Process:**
+    *   Consultant fills internally by the **3rd of each month**.
+    *   Project Lead reviews and provides feedback.
+    *   Shared with clients (link) by the **5th of the month** *after* Project Lead approval.
+    *   Additional formats (slides/docs) can be linked to Slite.
 
 ## Client Data
 This is data of the client.

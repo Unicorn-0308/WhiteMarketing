@@ -1,2 +1,6 @@
-*/__pycache__
+.env
+debug.py
+try.py
+
+**/__pycache__
 db/*_data

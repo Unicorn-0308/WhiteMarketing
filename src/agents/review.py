@@ -1,16 +1,19 @@
 import copy, json
 import datetime
-from threading import Thread
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
+from langgraph.config import get_stream_writer
 from langchain_core.messages import AIMessage
 
-from src.models.review import ReviewState
+from src.models.review import ReviewState, TaskState
 from src.utils import llm
 from db import mongo
 from config import PromptTemplate, get_prompt_template, llm_model
+
+import tiktoken
+encoding = tiktoken.encoding_for_model(llm_model['review'])
 
 # Nodes
 def get_client(state: ReviewState, config: RunnableConfig):
@@ -21,6 +24,14 @@ def get_project(state: ReviewState, config: RunnableConfig):
     project = mongo.find_one({"resource_type": 'project', "client": state['clientId']})
     attachments = list(mongo.find({"resource_type": 'attachment', "client": state['clientId'], "parent.gid": project['gid']}))
     project['attachments'] = attachments
+    del project['_id'], project['gid'], project['color'], project['custom_fields'], project['custom_field_settings'], project['default_access_level'],\
+        project['default_view'], project['minimum_access_level_for_customization'], project['minimum_access_level_for_sharing'], project['permalink_url'], project['privacy_setting'], \
+        project['resource_type'], project['workspace'], project['html_notes'], project['created_from_template'], project['from'], project['type'], project['client']
+    project['team'] = project['team']['name'] if project['team'] else ''
+    project['owner'] = project['owner']['name'] if project['owner'] else ''
+    project['followers'] = [follower['name'] for follower in project['followers']]
+    project['members'] = [member['name'] for member in project['members']]
+
     return {'project': project}
 
 def get_reviews(state: ReviewState, config: RunnableConfig):
@@ -28,12 +39,10 @@ def get_reviews(state: ReviewState, config: RunnableConfig):
     monthly_reviews = list(mongo.find({'type': 'monthly', "client": state['clientId']}).sort(['date']))
     for group in [weekly_reviews, monthly_reviews]:
         for review in group:
-            del review['_id'], review['sections']
+            del review['_id'], review['sections'], review['client'], review['from'], review['children'], review['parentNoteId'], review['id']
     return {'weekly': weekly_reviews, 'monthly': monthly_reviews}
 
 def get_tasks(state: ReviewState, config: RunnableConfig):
-    completed_tasks = []
-    active_tasks = []
     tasks = list(mongo.aggregate([
         {
             '$match': {
@@ -79,19 +88,11 @@ def get_tasks(state: ReviewState, config: RunnableConfig):
         }
     ]))
 
-    threads = []
-    new_tasks = []
-    for task in tasks:
-        threads.append(Thread(target=process_task, args=[{'task': task, 'new_tasks': new_tasks}], daemon=True))
-        threads[-1].start()
-    for thread in threads:
-        thread.join()
-
     return {
-        'tasks': new_tasks
+        'raw_tasks': tasks
     }
 
-def process_task(state):
+def process_task(state: TaskState):
     task = state['task']
     del task['_id'], task['html_notes'], task['hearts'], task['likes'], task['projects'], task['workspace'], task['created_by'], task['client'], task['from'], task['type']
     task['assignee'] = task['assignee']['name'] if task['assignee'] else ''
@@ -119,10 +120,9 @@ def process_task(state):
     ).choices[0].message.content
     task['stories'] = summary
 
-    state['new_tasks'].append(task)
-    # return {
-    #     'tasks': [task]
-    # }
+    return {
+        'tasks': [task]
+    }
 
 def get_response(state: ReviewState, config: RunnableConfig):
     ## Process context data
@@ -133,7 +133,6 @@ def get_response(state: ReviewState, config: RunnableConfig):
     client = json.dumps(client, indent=4)
 
     project = copy.deepcopy(state['project'])
-    project.pop('_id')
     project['created_at'] = project['created_at'].strftime("%Y-%m-%d %H:%M:%S")
     project['modified_at'] = project['modified_at'].strftime("%Y-%m-%d %H:%M:%S")
     if project['due_on']:
@@ -151,10 +150,8 @@ def get_response(state: ReviewState, config: RunnableConfig):
             review['updatedAt'] = review['updatedAt'].strftime("%Y-%m-%d %H:%M:%S")
             if review['date'] != '':
                 review['date'] = review['date'].strftime("%Y-%m-%d")
-            if review['type'] == 'weekly':
-                weekly += f"Weekly Review on {review['date']}\n{json.dumps(review)}"
-            else:
-                monthly += f"Monthly Review on {review['date']}\n{json.dumps(review)}"
+            weekly += f"{'Weekly' if review['type'] == 'weekly' else 'Monthly'} Review on {review['date']}\n{json.dumps(review, indent=4)}\n"
+            del review['type']
 
     tasks = copy.deepcopy(state['tasks'])
     tasks = sorted(tasks, key=lambda item: item['created_at'])
@@ -188,25 +185,30 @@ def get_response(state: ReviewState, config: RunnableConfig):
         completed_tasks=completed_tasks,
         active_tasks=active_tasks,
     )
-    response = llm.responses.create(
+
+    writer = get_stream_writer()
+    stream = llm.responses.create(
         model=llm_model["review"],
         input=[{
             'role': 'developer',
             'content': prompt,
         }],
+        stream=True
     )
-    with open('result.md', 'w', encoding='utf-8') as o:
-        o.write(response.output_text)
-    return {'messages': [AIMessage(response.output_text)]}
+    final_text = ''
+    for event in stream:
+        if event.type == 'response.output_text.delta':
+            final_text += event.delta
+            writer({'delta': event.delta, 'position': 'final_response'})
+    return {'messages': [AIMessage(final_text)]}
 
-def synthesizer(state: ReviewState):
-    """Synthesize full report from sections"""
-    print(state)
-    return {"tasks": state['tasks']}
+def synthesizer(state: ReviewState, config: RunnableConfig):
+
+    return {}
 
 # Conditional Edges
 def continue_to_task(state: ReviewState, config: RunnableConfig):
-    return [Send('process_task', {'task': task}) for task in state['raw_tasks']]
+    return [Send('process_task', {'task': task}) for index, task in enumerate(state['raw_tasks'])]
 
 
 # Setup Graph
@@ -225,30 +227,41 @@ def setup_graph():
     graph_builder.add_edge(START, 'get_project')
     graph_builder.add_edge(START, 'get_reviews')
     graph_builder.add_edge(START, 'get_tasks')
-    graph_builder.add_edge('get_client', 'get_response')
-    graph_builder.add_edge('get_project', 'get_response')
-    graph_builder.add_edge('get_reviews', 'get_response')
-    graph_builder.add_edge('get_tasks', 'get_response')
-    # graph_builder.add_conditional_edges('get_tasks', continue_to_task, ["process_task"])
-    # graph_builder.add_edge("process_task", "get_response")
-    # graph_builder.add_edge("process_task", "synthesizer")
-    # graph_builder.add_edge("synthesizer", "get_response")
+    graph_builder.add_edge('get_client', 'synthesizer')
+    graph_builder.add_edge('get_project', 'synthesizer')
+    graph_builder.add_edge('get_reviews', 'synthesizer')
+    graph_builder.add_edge('get_tasks', 'synthesizer')
+    graph_builder.add_conditional_edges('synthesizer', continue_to_task, {'process_task': 'process_task'})
+    graph_builder.add_edge('process_task', 'get_response')
     graph_builder.add_edge('get_response', END)
 
     return graph_builder
 
 
 if __name__ == '__main__':
-    graph = setup_graph().compile()
+    from dotenv import load_dotenv
+    load_dotenv('./../../.env')
 
-    events = graph.stream(
-        {
-            "messages": [],
-            "clientId": "162"
-        },
-        stream_mode="values",
-    )
-    for event in events:
-        pass
-        # if "messages" in event:
-        #     event["messages"][-1].pretty_print()
+    graph = setup_graph().compile()  # graph is compiled in setup_graph now
+    code = graph.get_graph().draw_mermaid()
+    print(code)
+
+    initial_state = {
+        "messages": [{"role": "user", "content": "Hello!"}],
+        "clientId": "179",
+        "tasks": [],
+    }
+
+    # Stream with config to see full state updates
+    config = {"recursion_limit": 100, "configurable": {"thread_id": "test-thread"}}
+    for event_part in graph.stream(initial_state, config=config, stream_mode="updates"):
+        # event_part is a dictionary where keys are node names and values are their output
+        print(f"--- Graph Update ---")
+        for node_name, output in event_part.items():
+            print(f"Node '{node_name}'")
+            # if node_name == "process_task" and "tasks" in output:
+            #     print(f"  ^^^ process_task produced tasks, this should trigger accumulator.")
+        # To see the full state after each update, you'd need to inspect the graph's internal state
+        # or rely on the final event from get_response.
+
+    print("\n--- Final state (from a final invocation if needed, or inspect last event) ---")

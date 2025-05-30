@@ -1,9 +1,8 @@
 import operator
 
-from typing import Annotated, TypedDict, List, Dict, Any
+from typing import Annotated, TypedDict, List, Dict, Any, Optional
 from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
-
 
 class ReviewState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
@@ -17,4 +16,3 @@ class ReviewState(TypedDict):
 
 class TaskState(TypedDict):
     task: Dict[str, Any]
-    tasks: Annotated[List[Dict[str, Any]], operator.add]

@@ -4,6 +4,9 @@ from src.agents.review import setup_graph # Assuming your script is langgraph_ag
 # If ReviewState is used for type hinting or direct instantiation, import it too.
 # from langgraph_agent import ReviewState
 
+import nest_asyncio
+nest_asyncio.apply()
+
 # --- Page Configuration ---
 st.set_page_config(
     layout="wide",
@@ -86,6 +89,7 @@ if 'last_client_id' not in st.session_state:
 if run_button:
     if selected_client_id:
         st.session_state.last_client_id = selected_client_id
+        response_holder = st.empty()
         with st.spinner(f"🤖 Generating report for Client ID: {selected_client_id}... This might take a few moments."):
             try:
                 # The initial state for your graph needs the 'clientId'
@@ -98,23 +102,27 @@ if run_button:
                 # config = RunnableConfig(configurable={"thread_id": "some_thread_id"})
                 # final_state = compiled_graph.invoke(initial_state, config=config)
 
-                final_state = compiled_graph.invoke(initial_state)
-
-                if final_state and 'messages' in final_state and final_state['messages']:
-                    # Assuming the relevant message is the first AIMessage
-                    report_content = final_state['messages'][0].content
-                    st.session_state.last_report = report_content
-                    st.success(f"Report generated successfully for Client ID: {selected_client_id}!")
-                else:
-                    st.session_state.last_report = "No report content found in the agent's response."
-                    st.error("Failed to generate report: No messages found in the output state.")
-                    st.json(final_state) # Display the final state for debugging
+                stream = compiled_graph.stream(initial_state, stream_mode='custom')
+                report_content = ''
+                for chunk in stream:
+                    report_content += chunk['delta']
+                    response_holder.markdown(report_content)
 
             except Exception as e:
                 st.session_state.last_report = f"An error occurred: {str(e)}"
                 st.error(f"An error occurred while generating the report: {e}")
                 import traceback
                 st.text(traceback.format_exc())
+
+
+        if report_content:
+            # Assuming the relevant message is the first AIMessage
+            st.session_state.last_report = report_content
+            st.success(f"Report generated successfully for Client ID: {selected_client_id}!")
+        else:
+            st.session_state.last_report = "No report content found in the agent's response."
+            st.error("Failed to generate report: No messages found in the output state.")
+        st.rerun()
     else:
         st.warning("Please select a Client ID.")
 
