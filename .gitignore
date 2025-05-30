@@ -1,5 +1,4 @@
 .env
-count_token.py
 try.py
 
 **/__pycache__
