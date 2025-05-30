@@ -63,33 +63,6 @@ def get_query(state: TaskGenState, config: RunnableConfig):
     completed_tasks = json.dumps(completed_tasks[max(0, len(weekly_reviews) - 100):], indent=4)
     active_tasks = json.dumps(active_tasks, indent=4)
 
-    prompt = get_prompt_template(PromptTemplate.TASK_INFO_GEN)
-    prompt = prompt.format(
-        today=today,
-        description=state['description'],
-        client_spec=state['client_spec'],
-        project_data=project,
-        weekly_reviews=weekly,
-        monthly_reviews=monthly,
-        completed_tasks=completed_tasks,
-        active_tasks=active_tasks,
-    )
-
-    writer = get_stream_writer()
-    stream = llm.responses.create(
-        model=llm_model["task"],
-        input=[{
-            'role': 'developer',
-            'content': prompt,
-        }],
-        stream=True,
-    )
-    final_text = ''
-    for event in stream:
-        if event.type == 'response.output_text.delta':
-            final_text += event.delta
-            writer({'delta': event.delta, 'position': 'final_response'})
-
     prompt = get_prompt_template(PromptTemplate.TASK_GEN)
     prompt = prompt.format(
         today=today,
@@ -109,7 +82,6 @@ def get_query(state: TaskGenState, config: RunnableConfig):
         }],
         text_format=Task
     ).output_parsed
-    writer({'task': task, 'position': 'final_task'})
 
     return {}
 

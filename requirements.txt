@@ -16,3 +16,4 @@ nest-asyncio~=1.6.0
 requests~=2.32.3
 attrs~=25.3.0
 tiktoken~=0.9.0
+st-theme~=1.2.3
