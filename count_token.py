@@ -24,8 +24,8 @@ def get_encoder(name):
 with st.sidebar:
     st.header("⚙️ Model Configuration")
     model_names = [
-        "gpt-4.1",
         "gpt-4o",
+        "gpt-4.1",
         "gpt-4.1-nano"
     ]
     selected_model_name = st.selectbox(
@@ -34,9 +34,6 @@ with st.sidebar:
         index=0, # Default selection
         help="Choose the model for whom to generate the response."
     )
-    if 'last_model' not in st.session_state or selected_model_name != st.session_state.last_model:
-        st.session_state.last_model = selected_model_name
-        st.session_state.encoder = get_encoder(selected_model_name)
 
     run_button = st.button("🚀 Count Tokens")
 
@@ -52,6 +49,10 @@ text = st.text_area("Input your whole text.")
 
 if run_button:
     if selected_model_name:
+        if 'last_model' not in st.session_state or selected_model_name != st.session_state.last_model:
+            st.session_state.last_model = selected_model_name
+            st.session_state.encoder = get_encoder(selected_model_name)
+
         with st.spinner(f"🤖 Count Token numbers for Model: {st.session_state.last_model}... This might take a few seconds."):
             try:
                 count = len(st.session_state.encoder.encode(text))
@@ -70,7 +71,7 @@ if run_button:
         else:
             st.session_state.last_count = "No report content found in the agent's response."
             st.error("Failed to generate report: No messages found in the output state.")
-        st.rerun()
+        # st.rerun()
     else:
         st.warning("Please select a Model name.")
 
