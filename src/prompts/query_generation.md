@@ -25,6 +25,9 @@ Today is **{today}** and you have to create mongo query or pinecone query to get
   - You can also use multiple tools.
 
 
+{example}
+
+
 # To archive purpose, analyze the below CONTEXT data first.
 **IMPORTANT** Focus on the RELATIONSHIP between tasks and reviews, especially datetime information such as created_at, completed_at, due_date, date, etc.
 

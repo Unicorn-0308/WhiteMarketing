@@ -1,7 +1,9 @@
 import copy, json
 import datetime
 from dotenv import load_dotenv
-load_dotenv('.env')
+from llama_index.core.indices.vector_store.retrievers.auto_retriever.prompts import example_query
+
+load_dotenv('./../../.env')
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
@@ -13,7 +15,7 @@ from db import mongo, pinecone
 from config import PromptTemplate, get_prompt_template, llm_model, pinecone_info
 from src.agents.global_func import func_get_client, func_get_project, func_get_reviews, func_get_tasks, \
     func_process_task, func_get_response
-from src.models.general import GeneralState, TaskState, Tools, Tools_, ToolState, MongoFilter, MongoAggregation, PineconeQuery
+from src.models.general import GeneralState, TaskState, Tools, Tools_, ToolState, MongoFilter, MongoAggregation, PineconeQuery, Tool
 from src.utils import llm
 
 
@@ -23,7 +25,7 @@ def get_client(state: GeneralState, config: RunnableConfig):
     data = list(mongo.find({ 'type': "client_spec", 'client': "009", 'from': "Slite", 'content': {'$ne': ""} }))
     client_spec = ''
     for note in data:
-        client_spec += f"# {note['title']}\n{note['content']}\n\n"
+        client_spec += f"# {note['title']}\n{json.dumps(note['content'], indent=4)}\n\n"
 
     summary = llm.chat.completions.create(
         model=llm_model['summarize'],
@@ -64,9 +66,11 @@ def get_tools(state: GeneralState, config: RunnableConfig):
     active_tasks = json.dumps(active_tasks, indent=4)
 
     prompt = get_prompt_template(PromptTemplate.TOOL_GEN)
+    example_prompt = get_prompt_template(PromptTemplate.EXAMPLES)
     prompt = prompt.format(
         today=today,
-        client_spec=state['client_spec'],
+        example=example_prompt,
+        client_spec=f"User ID: {str(state['clientId'])}\n{state['client_spec']}",
         project_data=project,
         weekly_reviews=weekly,
         monthly_reviews=monthly,
@@ -74,63 +78,90 @@ def get_tools(state: GeneralState, config: RunnableConfig):
         active_tasks=active_tasks,
     )
     
-    # Create a corrected schema for OpenAI API
-    tools_schema = copy.deepcopy(Tools_)
-    
-    # Add additionalProperties: false to the root schema
-    tools_schema["additionalProperties"] = False
-    
-    # Fix all additionalProperties issues for OpenAI API
-    if "$defs" in tools_schema:
-        # Fix all definitions to have additionalProperties: false
-        for def_name, def_schema in tools_schema["$defs"].items():
-            if def_schema.get("type") == "object":
-                def_schema["additionalProperties"] = False
-        
-        # Fix MongoAggregation pipeline items
-        if "MongoAggregation" in tools_schema["$defs"]:
-            if "properties" in tools_schema["$defs"]["MongoAggregation"] and "pipeline" in tools_schema["$defs"]["MongoAggregation"]["properties"]:
-                tools_schema["$defs"]["MongoAggregation"]["properties"]["pipeline"]["items"]["additionalProperties"] = False
-        
-        # Fix MongoFilter filter object
-        if "MongoFilter" in tools_schema["$defs"]:
-            if "properties" in tools_schema["$defs"]["MongoFilter"] and "filter" in tools_schema["$defs"]["MongoFilter"]["properties"]:
-                tools_schema["$defs"]["MongoFilter"]["properties"]["filter"]["additionalProperties"] = False
-            # Fix sort items
-            if "properties" in tools_schema["$defs"]["MongoFilter"] and "sort" in tools_schema["$defs"]["MongoFilter"]["properties"]:
-                tools_schema["$defs"]["MongoFilter"]["properties"]["sort"]["items"]["additionalProperties"] = False
-        
-        # Fix PineconeQuery meta_filter
-        if "PineconeQuery" in tools_schema["$defs"]:
-            if "properties" in tools_schema["$defs"]["PineconeQuery"] and "meta_filter" in tools_schema["$defs"]["PineconeQuery"]["properties"]:
-                if "anyOf" in tools_schema["$defs"]["PineconeQuery"]["properties"]["meta_filter"]:
-                    for item in tools_schema["$defs"]["PineconeQuery"]["properties"]["meta_filter"]["anyOf"]:
-                        if item.get("type") == "object" and "additionalProperties" in item:
-                            item["additionalProperties"] = False
-    
-    # Wrap the schema in the expected OpenAI format
-    openai_schema = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "tools_response",
-            "schema": tools_schema,
-            "strict": True
-        }
-    }
-    
-    tools = llm.responses.parse(
+    # Use a simpler approach - get the response as text and parse it manually
+    response = llm.chat.completions.create(
         model=llm_model["query"],
-        input=[{
+        messages=[{
             'role': 'developer',
-            'content': prompt,
+            'content': prompt + "\n\nPlease respond with a JSON object in the following format:\n" + json.dumps({
+                "tools": [
+                    {
+                        "tool": "mongo_filter | mongo_aggregation | pinecone_search",
+                        "param": {
+                            "purpose": "description of what this tool is for",
+                            "filter": {"field": "value"},  # for mongo_filter
+                            "sort": [{"field": 1}],  # for mongo_filter
+                            "limit": 10,  # for mongo_filter
+                            "pipeline": [{"$match": {}}],  # for mongo_aggregation
+                            "query": "search query",  # for pinecone_search
+                            "top_k": 10,  # for pinecone_search
+                            "meta_filter": {}  # for pinecone_search
+                        }
+                    }
+                ]
+            }, indent=2)
         }, {
             'role': 'user',
             'content': state['messages'][-1].content
-        }],
-        text_format=openai_schema
-    ).output_parsed
-
-    return {'tools': tools}
+        }]
+    )
+    
+    # Parse the response
+    try:
+        tools_data = json.loads(response.choices[0].message.content)
+    except json.JSONDecodeError:
+        # If JSON parsing fails, try to extract JSON from the response
+        content = response.choices[0].message.content
+        # Find JSON content between ```json and ```
+        import re
+        json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+        if json_match:
+            tools_data = json.loads(json_match.group(1))
+        else:
+            # Try to find any JSON object in the response
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                tools_data = json.loads(json_match.group(0))
+            else:
+                tools_data = {"tools": []}
+    
+    # Convert the response to the expected format
+    tools = []
+    for tool_data in tools_data.get('tools', []):
+        tool_name = tool_data['tool']
+        param = tool_data['param']
+        
+        if tool_name == 'mongo_filter':
+            tool_obj = Tool(
+                tool=tool_name,
+                param=MongoFilter(
+                    purpose=param['purpose'],
+                    filter=param.get('filter', {}),
+                    sort=param.get('sort', []),
+                    limit=param.get('limit', 10)
+                )
+            )
+        elif tool_name == 'mongo_aggregation':
+            tool_obj = Tool(
+                tool=tool_name,
+                param=MongoAggregation(
+                    purpose=param['purpose'],
+                    pipeline=param.get('pipeline', [])
+                )
+            )
+        elif tool_name == 'pinecone_search':
+            tool_obj = Tool(
+                tool=tool_name,
+                param=PineconeQuery(
+                    purpose=param['purpose'],
+                    query=param.get('query', ''),
+                    top_k=param.get('top_k', 10),
+                    meta_filter=param.get('meta_filter')
+                )
+            )
+        tools.append(tool_obj)
+    
+    return {'tools': Tools(tools=tools)}
 
 def mongo_filter(state: ToolState):
     tool = state['tool']
@@ -216,6 +247,9 @@ def get_response(state: GeneralState, config: RunnableConfig):
         input=[{
             'role': 'developer',
             'content': prompt,
+        }, {
+            'role': 'user',
+            'content': state['messages'][-1].content
         }],
         stream=True,
     )
@@ -234,7 +268,7 @@ def continue_to_task(state: GeneralState, config: RunnableConfig):
     return [Send('process_task', {'task': task}) for index, task in enumerate(state['raw_tasks'])]
 
 def continue_to_tool(state: GeneralState, config: RunnableConfig):
-    return [Send(tool.tool, {'tool': tool.param}) for index, tool in enumerate(state['tools'])]
+    return [Send(tool.tool, {'tool': tool.param}) for index, tool in enumerate(state['tools'].tools)]
 
 
 # Setup Graph
@@ -280,7 +314,7 @@ if __name__ == '__main__':
 
         initial_state = {
             "clientId": "009",
-            "messages": [HumanMessage(content="How many tasks are belong to user?")]
+            "messages": [HumanMessage(content="How many active tasks are belong to user?")]
         }
 
         # Stream with configuration to see full state updates

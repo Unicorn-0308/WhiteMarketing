@@ -30,8 +30,9 @@ class PromptTemplate(Enum):
     CLIENT_SUMMARIZE = "client_summarize.md"
     GENERAL_RESPONSE = "general_response.md"
     TOOL_GEN = "query_generation.md"
+    EXAMPLES = "examples.md"
 
 
 def get_prompt_template(prompt_template: PromptTemplate):
-    with open(os.path.join('src/prompts', prompt_template.value), "rt", encoding='utf-8') as f:
+    with open(os.path.join('./../prompts', prompt_template.value), "rt", encoding='utf-8') as f:
         return f.read()

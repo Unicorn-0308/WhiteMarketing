@@ -36,7 +36,7 @@ def func_get_reviews(client_id, agent: str="review_gen"):
     monthly_reviews = list(mongo.find({'type': 'monthly', "client": client_id}).sort(['date']))
     for group in [weekly_reviews, monthly_reviews]:
         for review in group:
-            del review['_id'], review['sections'], review['client'], review['from'], review['children'], review['parentNoteId'], review['id']
+            del review['_id'], review['content'], review['client'], review['from'], review['children'], review['parentNoteId'], review['id']
     return {'weekly': weekly_reviews, 'monthly': monthly_reviews}
 
 def func_get_tasks(client_id, agent: str="review_gen"):

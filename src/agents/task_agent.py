@@ -23,7 +23,7 @@ def get_client(state: TaskGenState, config: RunnableConfig):
     data = list(mongo.find({ 'type': "client_spec", 'client': "009", 'from': "Slite", 'content': {'$ne': ""} }))
     client_spec = ''
     for note in data:
-        client_spec += f"# {note['title']}\n{note['content']}\n\n"
+        client_spec += f"# {note['title']}\n{json.dumps(note['sections'], indent=4)}\n\n"
 
     summary = llm.chat.completions.create(
         model=llm_model['summarize'],
