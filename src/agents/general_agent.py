@@ -13,7 +13,7 @@ from db import mongo, pinecone
 from config import PromptTemplate, get_prompt_template, llm_model, pinecone_info
 from src.agents.global_func import func_get_client, func_get_project, func_get_reviews, func_get_tasks, \
     func_process_task, func_get_response
-from src.models.general import GeneralState, TaskState, Tools, Tools_, ToolState, MongoFilter, MongoAggregation, PineconeQuery
+from src.models.general import GeneralState, TaskState, Tools, ToolState, MongoFilter, MongoAggregation, PineconeQuery
 from src.utils import llm
 
 
@@ -74,50 +74,6 @@ def get_tools(state: GeneralState, config: RunnableConfig):
         active_tasks=active_tasks,
     )
     
-    # Create a corrected schema for OpenAI API
-    tools_schema = copy.deepcopy(Tools_)
-    
-    # Add additionalProperties: false to the root schema
-    tools_schema["additionalProperties"] = False
-    
-    # Fix all additionalProperties issues for OpenAI API
-    if "$defs" in tools_schema:
-        # Fix all definitions to have additionalProperties: false
-        for def_name, def_schema in tools_schema["$defs"].items():
-            if def_schema.get("type") == "object":
-                def_schema["additionalProperties"] = False
-        
-        # Fix MongoAggregation pipeline items
-        if "MongoAggregation" in tools_schema["$defs"]:
-            if "properties" in tools_schema["$defs"]["MongoAggregation"] and "pipeline" in tools_schema["$defs"]["MongoAggregation"]["properties"]:
-                tools_schema["$defs"]["MongoAggregation"]["properties"]["pipeline"]["items"]["additionalProperties"] = False
-        
-        # Fix MongoFilter filter object
-        if "MongoFilter" in tools_schema["$defs"]:
-            if "properties" in tools_schema["$defs"]["MongoFilter"] and "filter" in tools_schema["$defs"]["MongoFilter"]["properties"]:
-                tools_schema["$defs"]["MongoFilter"]["properties"]["filter"]["additionalProperties"] = False
-            # Fix sort items
-            if "properties" in tools_schema["$defs"]["MongoFilter"] and "sort" in tools_schema["$defs"]["MongoFilter"]["properties"]:
-                tools_schema["$defs"]["MongoFilter"]["properties"]["sort"]["items"]["additionalProperties"] = False
-        
-        # Fix PineconeQuery meta_filter
-        if "PineconeQuery" in tools_schema["$defs"]:
-            if "properties" in tools_schema["$defs"]["PineconeQuery"] and "meta_filter" in tools_schema["$defs"]["PineconeQuery"]["properties"]:
-                if "anyOf" in tools_schema["$defs"]["PineconeQuery"]["properties"]["meta_filter"]:
-                    for item in tools_schema["$defs"]["PineconeQuery"]["properties"]["meta_filter"]["anyOf"]:
-                        if item.get("type") == "object" and "additionalProperties" in item:
-                            item["additionalProperties"] = False
-    
-    # Wrap the schema in the expected OpenAI format
-    openai_schema = {
-        "type": "json_schema",
-        "json_schema": {
-            "name": "tools_response",
-            "schema": tools_schema,
-            "strict": True
-        }
-    }
-    
     tools = llm.responses.parse(
         model=llm_model["query"],
         input=[{
@@ -127,7 +83,7 @@ def get_tools(state: GeneralState, config: RunnableConfig):
             'role': 'user',
             'content': state['messages'][-1].content
         }],
-        text_format=openai_schema
+        text_format=Tools
     ).output_parsed
 
     return {'tools': tools}
@@ -148,7 +104,7 @@ def mongo_filter(state: ToolState):
 
     return {
         'datas': [{
-            'purpose': tool.purpose,
+            'purpose': state['purpose'],
             'result': list(result)
         }]
     }
@@ -162,7 +118,7 @@ def mongo_aggregation(state: ToolState):
 
     return {
         'datas': [{
-            'purpose': tool.purpose,
+            'purpose': state['purpose'],
             'result': list(result)
         }]
     }
@@ -186,7 +142,7 @@ def pinecone_search(state: ToolState):
 
     return {
         'datas': [{
-            'purpose': tool.purpose,
+            'purpose': state['purpose'],
             'result': results.get("matches", [])
         }]
     }
@@ -234,7 +190,7 @@ def continue_to_task(state: GeneralState, config: RunnableConfig):
     return [Send('process_task', {'task': task}) for index, task in enumerate(state['raw_tasks'])]
 
 def continue_to_tool(state: GeneralState, config: RunnableConfig):
-    return [Send(tool.tool, {'tool': tool.param}) for index, tool in enumerate(state['tools'])]
+    return [Send(tool.tool, {'tool': tool.param, 'purpose': tool.purpose}) for index, tool in enumerate(state['tools'])]
 
 
 # Setup Graph
