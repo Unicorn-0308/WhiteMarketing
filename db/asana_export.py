@@ -281,23 +281,23 @@ def set_metadata(space):
         for id_ in space[key]:
             space[key][id_].update({
                 'from': "Asana",
-                'openAI': [],
+                'client': [],
                 'type': type_,
             })
     for project in space['project']:
         if space['project'][project]["name"][:3].isnumeric():
-            space['project'][project]["openAI"] = [space['project'][project]["name"][:3]]
+            space['project'][project]["client"] = [space['project'][project]["name"][:3]]
     for task in space['task']:
         for project in space['task'][task]['projects']:
-            space['task'][task]['openAI'].extend(space['project'][project["gid"]]["openAI"])
+            space['task'][task]['client'].extend(space['project'][project["gid"]]["client"])
         if space['task'][task]['parent']:
-            space['task'][task]['openAI'].extend(space['task'][space['task'][task]['parent']["gid"]]["openAI"])
+            space['task'][task]['client'].extend(space['task'][space['task'][task]['parent']["gid"]]["client"])
     for attachment in space['attachment']:
-        space['attachment'][attachment]["openAI"] = space[space['attachment'][attachment]["parent"]["resource_type"]][space['attachment'][attachment]["parent"]["gid"]]["openAI"]
+        space['attachment'][attachment]["client"] = space[space['attachment'][attachment]["parent"]["resource_type"]][space['attachment'][attachment]["parent"]["gid"]]["client"]
     for section in space['section']:
-        space['section'][section]["openAI"] = space['project'][space['section'][section]["project"]["gid"]]["openAI"]
+        space['section'][section]["client"] = space['project'][space['section'][section]["project"]["gid"]]["client"]
     for story in space['story']:
-        space['story'][story]["openAI"] = space[space['story'][story]["target"]["resource_type"]][space['story'][story]["target"]["gid"]]["openAI"]
+        space['story'][story]["client"] = space[space['story'][story]["target"]["resource_type"]][space['story'][story]["target"]["gid"]]["client"]
     space["updated"] = list(space.keys())
 
 

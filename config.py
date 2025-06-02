@@ -29,8 +29,7 @@ class PromptTemplate(Enum):
     TASK_GEN = "task_generation_instance.md"
     CLIENT_SUMMARIZE = "client_summarize.md"
     GENERAL_RESPONSE = "general_response.md"
-    TOOL_GEN = "query_generation.md"
-    EXAMPLES = "examples.md"
+    TOOL_GEN = "tool_generation.md"
 
 
 def get_prompt_template(prompt_template: PromptTemplate):

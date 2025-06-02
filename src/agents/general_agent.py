@@ -1,9 +1,7 @@
 import copy, json
 import datetime
-from dotenv import load_dotenv
-from llama_index.core.indices.vector_store.retrievers.auto_retriever.prompts import example_query
-
-load_dotenv('./../../.env')
+# from dotenv import load_dotenv
+# load_dotenv('./../../.env')
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
@@ -13,9 +11,9 @@ from langchain_core.messages import AIMessage, HumanMessage
 from db import mongo, pinecone
 
 from config import PromptTemplate, get_prompt_template, llm_model, pinecone_info
-from src.agents.global_func import func_get_client, func_get_project, func_get_reviews, func_get_tasks, \
+from src.agents.utils import func_get_client, func_get_project, func_get_reviews, func_get_tasks, \
     func_process_task, func_get_response
-from src.models.general import GeneralState, TaskState, Tools, Tools_, ToolState, MongoFilter, MongoAggregation, PineconeQuery, Tool
+from src.models.general import GeneralState, TaskState, ToolState
 from src.utils import llm
 
 
@@ -66,112 +64,143 @@ def get_tools(state: GeneralState, config: RunnableConfig):
     active_tasks = json.dumps(active_tasks, indent=4)
 
     prompt = get_prompt_template(PromptTemplate.TOOL_GEN)
-    example_prompt = get_prompt_template(PromptTemplate.EXAMPLES)
-    prompt = prompt.format(
-        today=today,
-        example=example_prompt,
-        client_spec=f"User ID: {str(state['clientId'])}\n{state['client_spec']}",
-        project_data=project,
-        weekly_reviews=weekly,
-        monthly_reviews=monthly,
-        completed_tasks=completed_tasks,
-        active_tasks=active_tasks,
-    )
+    prompt = prompt\
+        .replace('{{0}}', today)\
+        .replace('{{1}}', state['client_spec'])\
+        .replace('{{2}}', project)\
+        .replace('{{3}}', weekly)\
+        .replace('{{4}}', monthly)\
+        .replace('{{5}}', completed_tasks)\
+        .replace('{{6}}', active_tasks)
     
-    # Use a simpler approach - get the response as text and parse it manually
-    response = llm.chat.completions.create(
+    result = llm.responses.create(
         model=llm_model["query"],
-        messages=[{
-            'role': 'developer',
-            'content': prompt + "\n\nPlease respond with a JSON object in the following format:\n" + json.dumps({
-                "tools": [
-                    {
-                        "tool": "mongo_filter | mongo_aggregation | pinecone_search",
-                        "param": {
-                            "purpose": "description of what this tool is for",
-                            "filter": {"field": "value"},  # for mongo_filter
-                            "sort": [{"field": 1}],  # for mongo_filter
-                            "limit": 10,  # for mongo_filter
-                            "pipeline": [{"$match": {}}],  # for mongo_aggregation
-                            "query": "search query",  # for pinecone_search
-                            "top_k": 10,  # for pinecone_search
-                            "meta_filter": {}  # for pinecone_search
-                        }
+        input=[{
+            'role': 'system',
+            'content': prompt,
+        }] + [{
+            'role': 'user' if isinstance(message, HumanMessage) else 'assistant',
+            'content': message.content
+        } for message in state['messages']],
+        tools=[{
+            "type": "function",
+            "name": "mongo_filter",
+            "description": "MongoDB Filter, Sort and Limit. Use this tool to get exact small amount data with much conditions.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "purpose": {
+                        "type": "string",
+                        "description": "This is the reason for why you decide to use this tool. It will be used in response. This is not empty."
+                    },
+                    "filter": {
+                        "type": "object",
+                        "description": "This is mongoDB filter object for python"
+                    },
+                    "sort": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "anyOf": [
+                                    {
+                                        "type": "string",
+                                    },
+                                    {
+                                        "type": "number",
+                                        "enum": [-1, 1]
+                                    }
+                                ]
+                            }
+                        },
+                        "description": "This is mongoDB sort object for python, not empty."
+                    },
+                    "limit": {
+                        "type": "number",
+                        "description": "This is mongoDB limit object for python, not negative."
                     }
-                ]
-            }, indent=2)
+                },
+                "required": [
+                    "purpose",
+                    "filter",
+                    "sort",
+                    "limit"
+                ],
+                "additionalProperties": False
+            }
         }, {
-            'role': 'user',
-            'content': state['messages'][-1].content
+            "type": "function",
+            "name": "mongo_aggregation",
+            "description": "MongoDB Aggregation. Use this tool for global data collecting such as counting, grouping and so on. Prefer this tool.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "purpose": {
+                        "type": "string",
+                        "description": "This is the reason for why you decide to use this tool. It will be used in response. This is not empty."
+                    },
+                    "pipeline": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "description": "This is mongoDB aggregation stage object for python"
+                        },
+                        "description": "This is mongoDB filter object for python"
+                    }
+                },
+                "required": [
+                    "purpose",
+                    "pipeline",
+                ],
+                "additionalProperties": False
+            }
+        }, {
+            "type": "function",
+            "name": "pinecone_search",
+            "description": "Pinecone vector search, meta filter and top k. use this tool for semantic search, that is difficult for mongo.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "purpose": {
+                        "type": "string",
+                        "description": "This is the reason for why you decide to use this tool. It will be used in response. This is not empty."
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "This is query string for vector search"
+                    },
+                    "top_k": {
+                        "type": "number",
+                        "description": "This is top k for vector search"
+                    },
+                    "meta_filter": {
+                        "type": "object",
+                        "description": "This is meta filter for vector search."
+                    }
+                },
+                "required": [
+                    "purpose",
+                    "query",
+                    "top_k",
+                    "meta_filter"
+                ],
+                "additionalProperties": False
+            }
         }]
-    )
-    
-    # Parse the response
-    try:
-        tools_data = json.loads(response.choices[0].message.content)
-    except json.JSONDecodeError:
-        # If JSON parsing fails, try to extract JSON from the response
-        content = response.choices[0].message.content
-        # Find JSON content between ```json and ```
-        import re
-        json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
-        if json_match:
-            tools_data = json.loads(json_match.group(1))
-        else:
-            # Try to find any JSON object in the response
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                tools_data = json.loads(json_match.group(0))
-            else:
-                tools_data = {"tools": []}
-    
-    # Convert the response to the expected format
-    tools = []
-    for tool_data in tools_data.get('tools', []):
-        tool_name = tool_data['tool']
-        param = tool_data['param']
-        
-        if tool_name == 'mongo_filter':
-            tool_obj = Tool(
-                tool=tool_name,
-                param=MongoFilter(
-                    purpose=param['purpose'],
-                    filter=param.get('filter', {}),
-                    sort=param.get('sort', []),
-                    limit=param.get('limit', 10)
-                )
-            )
-        elif tool_name == 'mongo_aggregation':
-            tool_obj = Tool(
-                tool=tool_name,
-                param=MongoAggregation(
-                    purpose=param['purpose'],
-                    pipeline=param.get('pipeline', [])
-                )
-            )
-        elif tool_name == 'pinecone_search':
-            tool_obj = Tool(
-                tool=tool_name,
-                param=PineconeQuery(
-                    purpose=param['purpose'],
-                    query=param.get('query', ''),
-                    top_k=param.get('top_k', 10),
-                    meta_filter=param.get('meta_filter')
-                )
-            )
-        tools.append(tool_obj)
-    
-    return {'tools': Tools(tools=tools)}
+    ).output
+
+    return {'tools': [{
+        'tool': tool.name,
+        'param': json.loads(tool.arguments)
+    } for tool in result]}
 
 def mongo_filter(state: ToolState):
     tool = state['tool']
-    if not isinstance(tool, MongoFilter):
-        return {}
 
-    result = mongo.collection.find(tool.filter)
-    if len(tool.sort):
-        result = result.sort(tool.sort)
-    result = result.limit(tool.limit)
+    result = mongo.find(tool["filter"])
+    if len(tool["sort"]):
+        result = result.sort(tool["sort"])
+    result = result.limit(tool["limit"])
     result = list(result)
     for el in result:
         if 'from' in el and el['from'] == 'Slite' and 'sections' in el:
@@ -179,46 +208,71 @@ def mongo_filter(state: ToolState):
 
     return {
         'datas': [{
-            'purpose': tool.purpose,
+            'purpose': tool["purpose"],
             'result': list(result)
         }]
     }
 
 def mongo_aggregation(state: ToolState):
     tool = state['tool']
-    if not isinstance(tool, MongoAggregation):
-        return {}
 
-    result = mongo.collection.aggregate(tool.pipeline)
+    result = mongo.aggregate(tool["pipeline"])
 
     return {
         'datas': [{
-            'purpose': tool.purpose,
+            'purpose': tool["purpose"],
             'result': list(result)
         }]
     }
 
 def pinecone_search(state: ToolState):
     tool = state['tool']
-    if not isinstance(tool, PineconeQuery):
-        return {}
 
     embedding = llm.embeddings.create(
-        input=tool.query,
+        input=tool["query"],
         model=llm_model['embedding'],
     ).data[0].embedding
-    results = pinecone.indexModel.query(
-        vector=embedding,
-        filter=tool.meta_filter,
-        top_k=tool.top_k,
-        include_metadata=True,
-        namespace=pinecone_info['env']
-    )
+    try:
+        results = pinecone.query(
+            vector=embedding,
+            filter=tool["meta_filter"],
+            top_k=tool["top_k"],
+            include_metadata=True,
+            namespace=pinecone_info['env']
+        )
+    except Exception as e:
+        del tool["meta_filter"]['client']
+        results = pinecone.query(
+            vector=embedding,
+            filter=tool["meta_filter"],
+            top_k=tool["top_k"],
+            include_metadata=True,
+            namespace=pinecone_info['env']
+        )
+    data = results.get("matches", [])
+    results = {}
+    for el in data:
+        if el['metadata']['from'] == 'Slite' and el['metadata']['id'] not in results:
+            document = mongo.find_one({'id': el['metadata']['id']})
+            del document['_id'], document['sections']
+        elif el['metadata']['from'] == 'Asana' and el['metadata']['id'] not in results:
+            document = mongo.find_one({'gid': el['metadata']['id']})
+            del document['_id']
+        else:
+            continue
+
+        for date in ["created_at", "completed_at", "due_on", "due_date", "modified_at", "updated_at", "date", "updatedAt"]:
+            if date in document and document[date]:
+                try:
+                    document[date] = document[date].strftime("%Y-%m-%d %H:%M:%S")
+                except Exception as e:
+                    print(date, document[date])
+        results[el['metadata']['id']] = document
 
     return {
         'datas': [{
-            'purpose': tool.purpose,
-            'result': results.get("matches", [])
+            'purpose': tool["purpose"],
+            'result': results
         }]
     }
 
@@ -245,12 +299,12 @@ def get_response(state: GeneralState, config: RunnableConfig):
     stream = llm.responses.create(
         model=llm_model["general"],
         input=[{
-            'role': 'developer',
+            'role': 'system',
             'content': prompt,
-        }, {
-            'role': 'user',
-            'content': state['messages'][-1].content
-        }],
+        }] + [{
+            'role': 'user' if isinstance(message, HumanMessage) else 'assistant',
+            'content': message.content
+        } for message in state['messages']],
         stream=True,
     )
     final_text = ''
@@ -268,7 +322,7 @@ def continue_to_task(state: GeneralState, config: RunnableConfig):
     return [Send('process_task', {'task': task}) for index, task in enumerate(state['raw_tasks'])]
 
 def continue_to_tool(state: GeneralState, config: RunnableConfig):
-    return [Send(tool.tool, {'tool': tool.param}) for index, tool in enumerate(state['tools'].tools)]
+    return [Send(tool["tool"], {'tool': tool["param"]}) for index, tool in enumerate(state['tools'])]
 
 
 # Setup Graph
@@ -314,7 +368,7 @@ if __name__ == '__main__':
 
         initial_state = {
             "clientId": "009",
-            "messages": [HumanMessage(content="How many active tasks are belong to user?")]
+            "messages": [HumanMessage(content="How should I create new weekly review for client 009?")]
         }
 
         # Stream with configuration to see full state updates

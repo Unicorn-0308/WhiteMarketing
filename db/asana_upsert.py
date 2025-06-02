@@ -30,7 +30,7 @@ def upsert_pinecone(space: dict, indexModel):
                 "id": key,
                 "metadata": {
                     "from": data["from"],
-                    "openAI": data["openAI"],
+                    "client": data["client"],
                     "type": data["type"],
                     "id": data["gid"],
                     "resource_type": resource_type,
@@ -85,10 +85,10 @@ if __name__ == "__main__":
     #     indexModel = pc.Index(index_name)
 
     # try:
-    #     openAI = MongoClient('mongodb+srv://johnbrophy1120:Jp2jQQ2p6DcayL1R@cluster0.thosduo.mongodb.net/', tlsCAFile=certifi.where())
-    #     openAI.admin.command('ismaster')
+    #     client = MongoClient('mongodb+srv://johnbrophy1120:Jp2jQQ2p6DcayL1R@cluster0.thosduo.mongodb.net/', tlsCAFile=certifi.where())
+    #     client.admin.command('ismaster')
     #     print("MongoDB connection successful!")
-    #     collection = openAI[dbname][collection_name]
+    #     collection = client[dbname][collection_name]
     # except ConnectionFailure:
     #     print("MongoDB connection failed!")
     #     sys.exit(1)
