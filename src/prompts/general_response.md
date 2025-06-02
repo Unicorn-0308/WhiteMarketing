@@ -14,16 +14,12 @@ Today is **{today}** and you have to give response to user's query based on the 
   - type: "general" (general data), "weekly" (weekly reviews), "monthly" (monthly reviews) or "client_spec" (client-related data)
   - date(optional): the date that a review had been built
   - resource_type(optional): the resource_type in Asana
-- The query is started from one specific user.
-  - In the context below, the user-spec data such as project, tasks, reviews are given.
-  - All data in the context below is from mongoDB.
-  - Analyze them and decide to use which tool.
-    - mongo filter
-    - mongo aggregation
-    - pinecone search
-  - The result of the tool must be less than 100, so set the limit value effectively.
-  - You can also use multiple tools.
-
+- You have already used mongoDB and pinecone tools to get necessary data to answer the user's question. The result data are in the "Context Data" section.
+  - The result data is an array of tool usages.
+  - Each tool usage has two fields
+    - "purpose": The reason why you used the tool.
+    - "result": The result data of the tool usage.
+- Response with only the exact answer to the user's question, not any extra text.
 
 # To archive purpose, analyze the below CONTEXT data first.
 **IMPORTANT** Focus on the RELATIONSHIP between tasks and reviews, especially datetime information such as created_at, completed_at, due_date, date, etc.

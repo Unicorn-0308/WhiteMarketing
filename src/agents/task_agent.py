@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage
 from db import mongo
 
 from config import PromptTemplate, get_prompt_template, llm_model
-from src.agents.global_func import func_get_client, func_get_project, func_get_reviews, func_get_tasks, \
+from src.agents.utils import func_get_client, func_get_project, func_get_reviews, func_get_tasks, \
     func_process_task, func_get_response
 from src.models.task import TaskGenState, TaskState, Task
 from src.utils import llm

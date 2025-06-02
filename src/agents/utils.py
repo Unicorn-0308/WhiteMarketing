@@ -145,18 +145,6 @@ def func_get_response(state, agent: str="review_gen"):
 
 
     tasks = copy.deepcopy(state['tasks'])
-    tasks = sorted(tasks, key=lambda item: item['created_at'])
-    for task in tasks:
-        for date in ["created_at", "completed_at", "due_on", "due_date", "modified_at"]:
-            if date in task and task[date] is not None:
-                try:
-                    task[date] = task[date].strftime("%Y-%m-%d %H:%M:%S")
-                except Exception as e:
-                    print(date, task[date])
-        try:
-            json.dumps(task)
-        except Exception as e:
-            print(e, task)
     completed_tasks = []
     active_tasks = []
     for task in tasks:
@@ -164,5 +152,19 @@ def func_get_response(state, agent: str="review_gen"):
             completed_tasks.append(task)
         else:
             active_tasks.append(task)
+    active_tasks = sorted(active_tasks, key=lambda item: item['due_on'] if item['due_on'] else datetime.datetime(3000, 12, 31))
+    completed_tasks = sorted(completed_tasks, key=lambda item: item['completed_at'])
+    for group in [completed_tasks, active_tasks]:
+        for task in group:
+            for date in ["created_at", "completed_at", "due_on", "due_date", "modified_at"]:
+                if date in task and task[date] is not None:
+                    try:
+                        task[date] = task[date].strftime("%Y-%m-%d %H:%M:%S")
+                    except Exception as e:
+                        print(date, task[date])
+            try:
+                json.dumps(task)
+            except:
+                print(task)
 
     return today, project, weekly_reviews, monthly_reviews, completed_tasks, active_tasks

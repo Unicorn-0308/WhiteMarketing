@@ -34,7 +34,7 @@ def upsert(notes, note_ids, indexModel, collection):
                 'values': response[index].embedding,
                 'metadata': {
                     'from': notes[note_id]['from'],
-                    'openAI': notes[note_id]['openAI'],
+                    'client': notes[note_id]['client'],
                     'type': notes[note_id]['type'],
                     'date': notes[note_id]['date'] if notes[note_id]['date'] else '',
                     'id': notes[note_id]['id'],

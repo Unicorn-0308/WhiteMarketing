@@ -6,7 +6,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from langgraph.config import get_stream_writer
 
-from src.agents.global_func import func_get_client, func_get_project, func_get_reviews, func_get_tasks, func_process_task, func_get_response
+from src.agents.utils import func_get_client, func_get_project, func_get_reviews, func_get_tasks, func_process_task, func_get_response
 from src.models.review import ReviewGenState, TaskState
 from src.utils import llm
 from db import mongo

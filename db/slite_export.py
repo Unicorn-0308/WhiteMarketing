@@ -44,7 +44,7 @@ async def get_doc(doc_gid: str, headers, client=[], type_="general"):
         doc_self.update({
             "sections": await split_markdown_into_sections(doc_self['content'], heading_level=3),
             "from": "Slite",
-            "openAI": client,
+            "client": client,
             "type": type_,
             "date": date,
         })
@@ -63,11 +63,11 @@ async def get_doc(doc_gid: str, headers, client=[], type_="general"):
                         continue
                     res = await get_doc(child["id"], headers, client=[child["title"][:3]], type_="client_spec")
 
-                elif doc_self["title"] == "Weekly Reviews" and len(doc_self["openAI"]):
-                    res = await get_doc(child["id"], headers, client=doc_self["openAI"], type_="weekly")
+                elif doc_self["title"] == "Weekly Reviews" and len(doc_self["client"]):
+                    res = await get_doc(child["id"], headers, client=doc_self["client"], type_="weekly")
 
-                elif doc_self["title"] == "Monthly Reviews" and len(doc_self["openAI"]):
-                    res = await get_doc(child["id"], headers, client=doc_self["openAI"], type_="monthly")
+                elif doc_self["title"] == "Monthly Reviews" and len(doc_self["client"]):
+                    res = await get_doc(child["id"], headers, client=doc_self["client"], type_="monthly")
 
                 else:
                     res = await get_doc(child["id"], headers, client=client, type_=type_)
@@ -177,10 +177,10 @@ if __name__ == "__main__":
 
     # notes = json.load(open("MVP_data/slite.json", "r"))
     # for note in notes:
-    #     if notes[note]["openAI"]:
-    #         notes[note]["openAI"] = [notes[note]["openAI"]]
+    #     if notes[note]["client"]:
+    #         notes[note]["client"] = [notes[note]["client"]]
     #     else:
-    #         notes[note]["openAI"] = []
+    #         notes[note]["client"] = []
     # json.dump(notes, open("MVP_data/slite.json", "w"), indent=4)
 
     # filter data
@@ -202,7 +202,7 @@ if __name__ == "__main__":
             notes[note]["attributes"] = attributes
             notes[note].update({
                 'from': "Slite",
-                'openAI': [],
+                'client': [],
                 'type': 'general',
                 'date': '',
             })
