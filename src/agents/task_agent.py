@@ -1,13 +1,9 @@
-import copy, json
-import datetime
-from dotenv import load_dotenv
-load_dotenv('./../../.env')
+import json
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Send
 from langgraph.config import get_stream_writer
-from langchain_core.messages import AIMessage
 from db import mongo
 
 from config import PromptTemplate, get_prompt_template, llm_model
@@ -60,7 +56,7 @@ def get_response(state: TaskGenState, config: RunnableConfig):
     for review in monthly_reviews[max(0, len(weekly_reviews) - 5):]:
         monthly += f"Monthly Review on {review['date']}\n{json.dumps(review, indent=4)}\n"
 
-    completed_tasks = json.dumps(completed_tasks[max(0, len(weekly_reviews) - 100):], indent=4)
+    completed_tasks = json.dumps(completed_tasks[max(0, len(completed_tasks) - 100):], indent=4)
     active_tasks = json.dumps(active_tasks, indent=4)
 
     prompt = get_prompt_template(PromptTemplate.TASK_INFO_GEN)

@@ -4,6 +4,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph import add_messages
 
 class GeneralState(TypedDict):
+    oldId: str
     clientId: str
     client_spec: str
     project: Dict[str, Any]

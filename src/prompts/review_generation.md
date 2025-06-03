@@ -49,6 +49,7 @@ Today is **{today}** and you have to give one specific client a new Review on yo
             Reason: [SENTENCE]
        ```
      - Follow the theme of provided reviews in the context, such as icons, structure, and so on.
+     - **IMPORTANT** You must keep the order of sections provided from General Guidelines. i.e., "H", "G," "N", "L", "P"
 - !IMPORTANT! Avoid using id and gids, instead use names.
 
 # To archive purpose, analyze the below context data first.

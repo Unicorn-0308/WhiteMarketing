@@ -1,5 +1,4 @@
-import copy, json
-import datetime
+import json
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
@@ -9,7 +8,6 @@ from langgraph.config import get_stream_writer
 from src.agents.utils import func_get_client, func_get_project, func_get_reviews, func_get_tasks, func_process_task, func_get_response
 from src.models.review import ReviewGenState, TaskState
 from src.utils import llm
-from db import mongo
 from config import PromptTemplate, get_prompt_template, llm_model
 
 
@@ -109,9 +107,6 @@ def setup_graph():
 
 
 if __name__ == '__main__':
-    from dotenv import load_dotenv
-    load_dotenv('./../../.env')
-
     graph = setup_graph().compile()  # graph is compiled in setup_graph now
     code = graph.get_graph().draw_mermaid()
     print(code)

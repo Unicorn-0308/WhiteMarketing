@@ -1,25 +1,28 @@
 import copy, json
 import datetime
+from typing import Literal
+
 # from dotenv import load_dotenv
 # load_dotenv('./../../.env')
 
+from openai.types.responses import ResponseFunctionToolCall
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
-from langgraph.types import Send
+from langgraph.types import Send, Command
 from langgraph.config import get_stream_writer
 from langchain_core.messages import AIMessage, HumanMessage
 from db import mongo, pinecone
 
 from config import PromptTemplate, get_prompt_template, llm_model, pinecone_info
 from src.agents.utils import func_get_client, func_get_project, func_get_reviews, func_get_tasks, \
-    func_process_task, func_get_response
+    func_process_task, func_get_response, mongo_json_serializer
 from src.models.general import GeneralState, TaskState, ToolState
 from src.utils import llm
 
 
 # Nodes
 def get_client(state: GeneralState, config: RunnableConfig):
-    client = func_get_client(state['clientId'], agent="task_gen")
+    client = func_get_client(state['clientId'], agent="general")
     data = list(mongo.find({ 'type': "client_spec", 'client': "009", 'from': "Slite", 'content': {'$ne': ""} }))
     client_spec = ''
     for note in data:
@@ -33,16 +36,16 @@ def get_client(state: GeneralState, config: RunnableConfig):
     return { 'clientId': client['clientId'], 'client_spec': summary }
 
 def get_project(state: GeneralState, config: RunnableConfig):
-    return func_get_project(state['clientId'], agent="task_gen")
+    return func_get_project(state['clientId'], agent="general")
 
 def get_reviews(state: GeneralState, config: RunnableConfig):
-    return func_get_reviews(state['clientId'], agent="task_gen")
+    return func_get_reviews(state['clientId'], agent="general")
 
 def get_tasks(state: GeneralState, config: RunnableConfig):
-    return func_get_tasks(state['clientId'], agent="task_gen")
+    return func_get_tasks(state['clientId'], agent="general")
 
 def process_task(state: TaskState, config: RunnableConfig):
-    return func_process_task(state['task'], agent="task_gen")
+    return func_process_task(state['task'], agent="general")
 
 def synthesizer(state: GeneralState, config: RunnableConfig):
     return {}
@@ -60,7 +63,7 @@ def get_tools(state: GeneralState, config: RunnableConfig):
     for review in monthly_reviews[max(0, len(weekly_reviews) - 5):]:
         monthly += f"Monthly Review on {review['date']}\n{json.dumps(review, indent=4)}\n"
 
-    completed_tasks = json.dumps(completed_tasks[max(0, len(weekly_reviews) - 100):], indent=4)
+    completed_tasks = json.dumps(completed_tasks[max(0, len(completed_tasks) - 10):], indent=4)
     active_tasks = json.dumps(active_tasks, indent=4)
 
     prompt = get_prompt_template(PromptTemplate.TOOL_GEN)
@@ -189,10 +192,18 @@ def get_tools(state: GeneralState, config: RunnableConfig):
         }]
     ).output
 
-    return {'tools': [{
-        'tool': tool.name,
-        'param': json.loads(tool.arguments)
-    } for tool in result]}
+    tools = []
+    for rs in result:
+        if isinstance(rs, ResponseFunctionToolCall):
+            tools.append({
+                'tool': rs.name,
+                'param': json.loads(rs.arguments)
+            })
+        else:
+            # print(rs)
+            pass
+
+    return {'tools': tools}
 
 def mongo_filter(state: ToolState):
     tool = state['tool']
@@ -205,11 +216,12 @@ def mongo_filter(state: ToolState):
     for el in result:
         if 'from' in el and el['from'] == 'Slite' and 'sections' in el:
             del el['sections']
+        del el['_id']
 
     return {
         'datas': [{
             'purpose': tool["purpose"],
-            'result': list(result)
+            'result': result
         }]
     }
 
@@ -292,7 +304,7 @@ def get_response(state: GeneralState, config: RunnableConfig):
         today=today,
         client_spec=state['client_spec'],
         project_data=project,
-        datas=json.dumps(state['datas'], indent=4),
+        datas=json.dumps(state['datas'][-len(state['tools']):], indent=4, default=mongo_json_serializer),
     )
 
     writer = get_stream_writer()
@@ -314,15 +326,25 @@ def get_response(state: GeneralState, config: RunnableConfig):
             writer({'delta': event.delta})
     return {
         'messages': [AIMessage(content=final_text)],
+        'oldId': state['clientId']
     }
 
 
 # Conditional Edges
+def conditional_entry(state: GeneralState, config: RunnableConfig):
+    if 'oldId' in state and state['oldId'] == state['clientId']:
+        return 'get_tools'
+    else:
+        return ['get_client', 'get_project', 'get_reviews', 'get_tasks']
+
 def continue_to_task(state: GeneralState, config: RunnableConfig):
     return [Send('process_task', {'task': task}) for index, task in enumerate(state['raw_tasks'])]
 
 def continue_to_tool(state: GeneralState, config: RunnableConfig):
-    return [Send(tool["tool"], {'tool': tool["param"]}) for index, tool in enumerate(state['tools'])]
+    if len(state['tools']) == 0:
+        return 'get_response'
+    else:
+        return [Send(tool["tool"], {'tool': tool["param"]}) for index, tool in enumerate(state['tools'])]
 
 
 # Setup Graph
@@ -341,17 +363,18 @@ def setup_graph():
     graph_builder.add_node(pinecone_search)
     graph_builder.add_node(get_response)
 
-    graph_builder.add_edge(START, 'get_client')
-    graph_builder.add_edge(START, 'get_project')
-    graph_builder.add_edge(START, 'get_reviews')
-    graph_builder.add_edge(START, 'get_tasks')
+    graph_builder.set_conditional_entry_point(conditional_entry, ['get_client', 'get_project', 'get_reviews', 'get_tasks', 'get_tools'])
+    # graph_builder.add_edge(START, 'get_client')
+    # graph_builder.add_edge(START, 'get_project')
+    # graph_builder.add_edge(START, 'get_reviews')
+    # graph_builder.add_edge(START, 'get_tasks')
     graph_builder.add_edge('get_client', 'synthesizer')
     graph_builder.add_edge('get_project', 'synthesizer')
     graph_builder.add_edge('get_reviews', 'synthesizer')
     graph_builder.add_edge('get_tasks', 'synthesizer')
     graph_builder.add_conditional_edges('synthesizer', continue_to_task, {'process_task': 'process_task'})
     graph_builder.add_edge('process_task', 'get_tools')
-    graph_builder.add_conditional_edges('get_tools', continue_to_tool, ["mongo_filter", "mongo_aggregation", "pinecone_search"])
+    graph_builder.add_conditional_edges('get_tools', continue_to_tool, ["mongo_filter", "mongo_aggregation", "pinecone_search", "get_response"])
     graph_builder.add_edge('mongo_filter', 'get_response')
     graph_builder.add_edge('mongo_aggregation', 'get_response')
     graph_builder.add_edge('pinecone_search', 'get_response')
@@ -362,13 +385,14 @@ def setup_graph():
 
 
 if __name__ == '__main__':
+    from langgraph.checkpoint.memory import InMemorySaver
     try:
-        graph = setup_graph().compile()  # graph is compiled in setup_graph now
+        graph = setup_graph().compile(checkpointer=InMemorySaver())  # graph is compiled in setup_graph now
         code = graph.get_graph().draw_mermaid()
 
         initial_state = {
             "clientId": "009",
-            "messages": [HumanMessage(content="How should I create new weekly review for client 009?")]
+            "messages": [HumanMessage(content="How many tasks belong to clietn 179")]
         }
 
         # Stream with configuration to see full state updates

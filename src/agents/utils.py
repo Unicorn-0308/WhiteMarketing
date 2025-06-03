@@ -1,12 +1,25 @@
-import datetime, json, copy
-from typing import Any
-
-from langchain_core.runnables import RunnableConfig
+import json, copy
+from bson import ObjectId
+from datetime import datetime
 
 from config import llm_model, get_prompt_template, PromptTemplate
 from db import mongo
 from src.utils import llm
 
+def mongo_json_serializer(obj):
+    """
+    Custom JSON serializer for objects not serializable by default json code.
+    Specifically handles ObjectId and datetime.datetime.
+    """
+    if isinstance(obj, ObjectId):
+        return str(obj)  # Convert ObjectId to its string representation
+    if isinstance(obj, datetime):
+        # Convert datetime to ISO 8601 format string.
+        # Using isoformat() is standard and includes timezone info if present.
+        return obj.strftime('%Y-%m-%d %H:%M:%S')
+    # For any other types that json can't handle, it will raise a TypeError
+    # You could add more type checks here if needed.
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 def func_get_client(client_id, agent: str="review_gen"):
     client = mongo.find_one({"gid": client_id})
@@ -85,12 +98,19 @@ def func_get_tasks(client_id, agent: str="review_gen"):
         }
     ]))
 
+    for task in tasks:
+        del task['_id']
+        for story in task['stories']:
+            del story['_id']
+        for attachment in task['attachments']:
+            del attachment['_id']
+
     return {
         'raw_tasks': tasks
     }
 
 def func_process_task(task, agent: str="review_gen"):
-    del task['_id'], task['html_notes'], task['hearts'], task['likes'], task['projects'], task['workspace'], task['created_by'], task['client'], task['from'], task['type']
+    del task['html_notes'], task['hearts'], task['likes'], task['projects'], task['workspace'], task['created_by'], task['client'], task['from'], task['type']
     task['assignee'] = task['assignee']['name'] if task['assignee'] else ''
     task['custom_fields'] = [{
         'name': cf['name'],
@@ -125,7 +145,7 @@ def func_process_task(task, agent: str="review_gen"):
     }
 
 def func_get_response(state, agent: str="review_gen"):
-    today = datetime.date.today().strftime('%Y-%m-%d')
+    today = datetime.today().strftime('%Y-%m-%d')
 
     project = copy.deepcopy(state['project'])
     project['created_at'] = project['created_at'].strftime("%Y-%m-%d %H:%M:%S")
@@ -152,7 +172,7 @@ def func_get_response(state, agent: str="review_gen"):
             completed_tasks.append(task)
         else:
             active_tasks.append(task)
-    active_tasks = sorted(active_tasks, key=lambda item: item['due_on'] if item['due_on'] else datetime.datetime(3000, 12, 31))
+    active_tasks = sorted(active_tasks, key=lambda item: item['due_on'] if item['due_on'] else datetime(3000, 12, 31))
     completed_tasks = sorted(completed_tasks, key=lambda item: item['completed_at'])
     for group in [completed_tasks, active_tasks]:
         for task in group:
