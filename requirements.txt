@@ -22,3 +22,4 @@ tqdm~=4.67.1
 asyncio
 llama-cloud>=0.0.6
 pinecone-client>=3.0.0
+Flask==3.1.1
