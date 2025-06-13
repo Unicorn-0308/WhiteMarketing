@@ -23,3 +23,4 @@ asyncio
 llama-cloud>=0.1.22
 pinecone-client>=2.2.4
 Flask==3.1.1
+Gunicorn
