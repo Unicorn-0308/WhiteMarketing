@@ -10,28 +10,44 @@ Today is **{today}** and you have to create a new task for this project on your 
   - client: array of clients that involve it
   - type: "general" (general data), "weekly" (weekly reviews), "monthly" (monthly reviews) or "client_spec" (client-related data)
   - date: the date that a review had been built
-- Your response must be full content of a new task, focus on its notes.
-  - Notes must follow the flow and structure of provided example tasks in context.
-  - Provide reference tasks or reviews with detailed information and links for each term.
-  - Give the reason for why you suggest it for each term. e.g.
-     ```text
-    [SENTENCE]
-         Ref: Task: [GID], [NAME], [LINK]
-         Reason: The reason for why we consider it for a new task
-    ```
-    ```text
-    [INFORMATION]
-         Ref: Task: [GID], [NAME], [LINK]
-              Review: [DATE], [LINK]
-         Reason: The reason for why we consider it for a new task
-    ```
-    ```text
-    [INFORMATION]
-         Ref: [GENERAL GUIDELINE]
-              [User specific data]
-         Reason: The reason for why we consider it for a new task
-    ```
-  - due_on must be date later than today or Null(i.e., no specific ending date)
+- Your response must consist of two parts
+  1.  Important, detailed, and structured information that is the basis of a new task.
+     - Provide all information in details based on the given context.
+     - Prefer table and chart format.
+     - Provide reference tasks, reviews, or something for each information following it. e.g.
+       ```text
+       [INFORMATION]
+            Ref: Task: [GID], [NAME], [LINK]
+            Description: The reason for why we consider it for a new task
+       ```
+       ```text
+       [INFORMATION]
+            Ref: Task: [GID], [NAME], [LINK]
+                 Review: [DATE], [LINK]
+            Description: The reason for why we consider it for a new task
+       ```
+  2. The new task, focus on its notes.
+     - Notes must follow the flow and structure of provided example tasks in context.
+     - Provide reference tasks or reviews with detailed information and links for each term.
+     - Give the reason for why you suggest it for each term. e.g.
+        ```text
+       [SENTENCE]
+            Ref: Task: [GID], [NAME], [LINK]
+            Reason: The reason for why we consider it for a new task
+       ```
+       ```text
+       [INFORMATION]
+            Ref: Task: [GID], [NAME], [LINK]
+                 Review: [DATE], [LINK]
+            Reason: The reason for why we consider it for a new task
+       ```
+       ```text
+       [INFORMATION]
+            Ref: [GENERAL GUIDELINE]
+                 [User specific data]
+            Reason: The reason for why we consider it for a new task
+       ```
+     - due_on must be date later than today or Null(i.e., no specific ending date)
 - !IMPORTANT! Avoid using id and gids, instead use names.
 
 

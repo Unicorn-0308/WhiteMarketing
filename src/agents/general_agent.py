@@ -23,7 +23,7 @@ from src.utils import llm
 # Nodes
 def get_client(state: GeneralState, config: RunnableConfig):
     client = func_get_client(state['clientId'], agent="general")
-    data = list(mongo.find({ 'type': "client_spec", 'client': "009", 'from': "Slite", 'content': {'$ne': ""} }))
+    data = list(mongo.find({ 'type': "client_spec", 'client': state['clientId'], 'from': "Slite", 'content': {'$ne': ""} }))
     client_spec = ''
     for note in data:
         client_spec += f"# {note['title']}\n{json.dumps(note['content'], indent=4)}\n\n"

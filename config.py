@@ -3,14 +3,14 @@ import os
 
 
 mongo_info = {
-    'url': 'mongodb+srv://johnbrophy1120:Jp2jQQ2p6DcayL1R@cluster0.thosduo.mongodb.net/',
+    'url': 'mongodb+srv://White-Market:Jp2jQQ2p6DcayL1R@cluster0.kae45en.mongodb.net/',
     'database': 'white_marketing',
-    'collection': 'mvp',
+    'collection': 'data',
 }
 
 pinecone_info = {
     'index': 'white-marketing',
-    'env': 'mvp'
+    'env': 'data'
 }
 
 llm_model = {

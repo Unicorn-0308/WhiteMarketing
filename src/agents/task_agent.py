@@ -16,7 +16,7 @@ from src.utils import llm
 # Nodes
 def get_client(state: TaskGenState, config: RunnableConfig):
     client = func_get_client(state['clientId'], agent="task_gen")
-    data = list(mongo.find({ 'type': "client_spec", 'client': "009", 'from': "Slite", 'content': {'$ne': ""} }))
+    data = list(mongo.find({ 'type': "client_spec", 'client': state['clientId'], 'from': "Slite", 'content': {'$ne': ""} }))
     client_spec = ''
     for note in data:
         client_spec += f"# {note['title']}\n{json.dumps(note['sections'], indent=4)}\n\n"

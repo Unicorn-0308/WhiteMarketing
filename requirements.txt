@@ -1,7 +1,6 @@
 certifi~=2024.12.14
 pymongo[srv]==4.12.1
 pinecone[grpc]==6.0.2
-pinecone-client~=2.2.4
 openai~=1.77.0
 langchain~=0.3.25
 langchain-core~=0.3.59
@@ -18,3 +17,8 @@ attrs~=25.3.0
 tiktoken~=0.9.0
 st-theme~=1.2.3
 markdown~=3.8
+asana~=5.0.18
+tqdm~=4.67.1
+asyncio
+llama-cloud>=0.0.6
+pinecone-client>=3.0.0
