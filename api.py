@@ -334,7 +334,7 @@ def health_check():
         'service': 'Asana Export API'
     }), 200
 
-@app.route("/update-slite", mothods=["GET"])
+@app.route("/update-slite", methods=["GET"])
 def update_slite():
     num_updated = asyncio.run(main())
     return jsonify({
