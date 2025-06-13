@@ -21,6 +21,7 @@ asana~=5.1.0
 tqdm~=4.67.1
 asyncio
 llama-cloud>=0.1.22
+llama-cloud-services>=0.6.23
 pinecone-client>=2.2.4
 Flask==3.1.1
 Gunicorn
