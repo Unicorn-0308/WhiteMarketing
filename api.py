@@ -35,8 +35,8 @@ def process_event(event):
     }
 
     if event.get('action') == 'deleted':
-        global_exporter.collection.delete_one({"gid": event_info["resource"]})
-        global_exporter.index_model.delete([event_info["resource"]], namespace=pinecone_info["env"])
+        global_exporter.collection.delete_one({"gid": event_info["resource"]["gid"]})
+        global_exporter.index_model.delete([event_info["resource"]["gid"]], namespace=pinecone_info["env"])
     elif event.get('action') == 'added' or event.get('action') == 'changed':
         if event_info['parent']:
             parent = global_exporter.collection.find_one({"gid": event_info["parent"]})
@@ -270,7 +270,7 @@ async def webhook_handler(gid: str, request: Request, response: Response):
                 # Here you could add logic to update your database based on the webhook event
                 # For example, re-fetch and update the changed resource
 
-                log_info(f"API: Processed event {event_info['type']}.{event_info['action']} for {event_info['resource_type']} {event_info['resource']}")
+                log_info(f"API: Processed event {event_info['type']}.{event_info['action']} for {event_info['resource_type']} {event_info['resource']['gid']}")
 
             except Exception as e:
                 log_error(f"API: Failed to process event for resource {gid}", e)
