@@ -68,7 +68,7 @@ def log_error(message, error=None):
             if error:
                 f.write(f"Error details: {str(error)}\n")
                 f.write(f"Traceback: {traceback.format_exc()}\n===========================================================\n")
-        print(f"ERROR: {message}")
+        print(f"ERROR: {message}, {str(error)}")
 
 # Setup Asana client
 configuration = asana.Configuration()

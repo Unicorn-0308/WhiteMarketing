@@ -87,6 +87,56 @@ async def export_all(response: Response):
         }
 
 
+@app.get('/establish-all')
+async def establish_all(response: Response):
+    try:
+        log_info("API: Starting to establish webhooks for projects")
+        projects = global_exporter.collection.find({
+            "name": {
+                "$regex": "^\d{3}"
+            },
+            "resource_type": "project"
+        })
+
+        total_projects = 0
+        success_projects = 0
+        for project in projects:
+            log_info(f"API: Starting establish-webhook request for project {project.get('name', '')}")
+            response = request('get', f"https://whitemarketing.onrender.com/establish-webhook/{project.get('gid', '')}")
+            if response.status_code != 200:
+                log_error(f"API: Failed to establish webhook for project {project.get('name', '')}", response.content)
+            else:
+                log_info(f"API: Establish-webhooks completed. Success: {project.get('name', '')}")
+                success_projects += 1
+            total_projects += 1
+        log_info(f"API: Success to establish webhooks for projects. Success {success_projects}/{total_projects}")
+
+        log_info("API: Starting to establish webhooks for workspaces")
+        workspaces = global_exporter.collection.find({'resource_type': 'workspace'})
+        total_workspaces = 0
+        success_workspaces = 0
+        for workspace in workspaces:
+            log_info(f"API: Starting establish-webhook request for workspace {workspace.get('name', '')}")
+            response = request('get', f"https://whitemarketing.onrender.com/establish-webhook/{workspace.get('gid', '')}")
+            if response.status_code != 200:
+                log_error(f"API: Failed to establish webhook for workspace {workspace.get('name', '')}", response.content)
+            else:
+                log_info(f"API: Establish-webhooks completed. Success: {workspace.get('name', '')}")
+                success_workspaces += 1
+            total_workspaces += 1
+        log_info(f"API: Success to establish webhooks for workspaces. Success {success_workspaces}/{total_workspaces}")
+
+        return {
+            'status': 'success',
+            'projects': f"Success {success_projects}/{total_projects}",
+            'workspaces': f"Success {success_workspaces}/{total_workspaces}",
+        }
+
+    except Exception as e:
+        log_error("API: Failed to establish webhooks", e)
+        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {}
+
 @app.get("/establish-webhook/{gid}")
 async def establish_webhook(gid: str, request: Request, response: Response):
     try:
