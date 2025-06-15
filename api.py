@@ -93,7 +93,7 @@ async def establish_all(response: Response):
         log_info("API: Starting to establish webhooks for projects")
         projects = global_exporter.collection.find({
             "name": {
-                "$regex": "^\d{3}"
+                "$regex": "^\\d{3}"
             },
             "resource_type": "project"
         })
