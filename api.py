@@ -186,27 +186,21 @@ async def establish_webhook(gid: str, request: Request, response: Response):
                 webhook_data.update({
                     'filters': [{
                         "resource_type": "project",
-                        "resource_subtype": "project",
                         "action": "changed"
                       }, {
                         "resource_type": "project",
-                        "resource_subtype": "project",
                         "action": "added"
                       }, {
                         "resource_type": "project",
-                        "resource_subtype": "project",
                         "action": "deleted"
                       }, {
                         "resource_type": "project",
-                        "resource_subtype": "project",
                         "action": "removed"
                       }, {
                         "resource_type": "team_membership",
-                        "resource_subtype": "team_membership",
                         "action": "added"
                       }, {
                         "resource_type": "team_membership",
-                        "resource_subtype": "team_membership",
                         "action": "removed"
                       }]
                 })
