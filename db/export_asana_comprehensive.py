@@ -1564,6 +1564,8 @@ class AsanaExporter:
             log_error("Critical error in export process", e)
             raise
 
+global_exporter = AsanaExporter()
+
 # def main():
 #     """Main function to run the export."""
 #     exporter = AsanaExporter()

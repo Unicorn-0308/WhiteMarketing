@@ -14,7 +14,8 @@ from db.export_asana_comprehensive import (
     log_info,
     log_error,
     get_response,
-    api_client
+    api_client,
+    global_exporter
 )
 from db.slite_combined_export import main
 from config import pinecone_info
@@ -25,7 +26,6 @@ from config import pinecone_info
 app = Flask(__name__)
 
 # Global AsanaExporter instance
-global_exporter = AsanaExporter()
 
 
 # def setup_global_exporter():
@@ -352,4 +352,4 @@ def update_slite():
     }), 200
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, ssl_context=("cert.pem", "key.pem"))
