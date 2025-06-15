@@ -34,6 +34,9 @@ def process_event(event):
         'user': event.get('user', {}).get('gid') if event.get('user') else None
     }
 
+    if event.get('resource_type') == 'attachments':
+        return event_info
+
     if event.get('action') == 'deleted':
         global_exporter.collection.delete_one({"gid": event_info["resource"]["gid"]})
         global_exporter.index_model.delete([event_info["resource"]["gid"]], namespace=pinecone_info["env"])
