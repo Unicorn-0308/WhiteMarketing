@@ -37,7 +37,7 @@ def process_event(event):
     if event.get('action') == 'deleted':
         global_exporter.collection.delete_one({"gid": event_info["resource"]["gid"]})
         global_exporter.index_model.delete([event_info["resource"]["gid"]], namespace=pinecone_info["env"])
-    elif event.get('action') == 'added' or event.get('action') == 'changed':
+    elif event.get('action') in ['added', 'changed', 'removed']:
         if event_info['parent']:
             parent = global_exporter.collection.find_one({"gid": event_info["parent"]})
             parent_clients = parent.get('clients', [])
@@ -182,6 +182,34 @@ async def establish_webhook(gid: str, request: Request, response: Response):
                 'resource': gid,
                 'target': webhook_url
             }
+            if resource.get('resource_type') == 'workspace':
+                webhook_data.update({
+                    'filters': [{
+                        "resource_type": "project",
+                        "resource_subtype": "project",
+                        "action": "changed"
+                      }, {
+                        "resource_type": "project",
+                        "resource_subtype": "project",
+                        "action": "added"
+                      }, {
+                        "resource_type": "project",
+                        "resource_subtype": "project",
+                        "action": "deleted"
+                      }, {
+                        "resource_type": "project",
+                        "resource_subtype": "project",
+                        "action": "removed"
+                      }, {
+                        "resource_type": "team_membership",
+                        "resource_subtype": "team_membership",
+                        "action": "added"
+                      }, {
+                        "resource_type": "team_membership",
+                        "resource_subtype": "team_membership",
+                        "action": "removed"
+                      }]
+                })
 
             # Use the webhooks API to create webhook
             res = get_response(webhooks_api.create_webhook, {'data': webhook_data}, {}, full_payload=True)
