@@ -649,26 +649,22 @@ async def process_client_channel(headers, id):
             try:
                 response = get_response(f"https://api.slite.com/v1/notes/{id}/children?cursor={cursor}", headers=headers, name="client_children")
                 children = response.json()
-                
-                for child in children["notes"]:
-                    isUpserted = len(list(mongo_collection.find({"id": child["id"]})))
-                    if isUpserted:
-                        continue
 
+                for child in children["notes"]:
                     result[channel_doc["id"]]["children"].append(child["id"])
-                    
+
                     # Check if child title starts with three digits (client-related)
                     if child["title"][:3].isnumeric():
                         client_id = child["title"][:3]
                         log_info(f"Found client subdoc: {child['title']} (Client ID: {client_id})")
-                        
+
                         # Process client subdoc in a separate thread
                         def run_client_subdoc(subdoc_id, client_id_param):
                             try:
                                 asyncio.run(process_client_subdoc(subdoc_id, client_id_param, headers, result))
                             except Exception as e:
                                 log_error(f"Error in client subdoc thread for {subdoc_id}", e)
-                        
+
                         thread = Thread(
                             target=run_client_subdoc,
                             args=(child["id"], client_id),
