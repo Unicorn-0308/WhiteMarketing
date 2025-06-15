@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+from datetime import timezone
 import json
 import os
 import re
@@ -415,7 +416,7 @@ async def get_doc(doc_gid: str, headers, client=[], type_="general", s_format="%
 
         need_update = True
         mongo_self = list(mongo_collection.find({"id": doc_gid}))
-        if len(mongo_self) and mongo_self[0]["updatedAt"] >= datetime.datetime.fromisoformat(doc_self['updatedAt']):
+        if len(mongo_self) and mongo_self[0]["updatedAt"].replace(tzinfo=timezone.utc) >= datetime.datetime.fromisoformat(doc_self['updatedAt']):
             need_update = False
 
         if need_update:
@@ -616,20 +617,30 @@ async def process_client_channel(headers, id):
             return {}
         
         channel_doc = response.json()
-        # Process attributes and columns for channel doc
-        channel_doc = process_attributes_and_columns(channel_doc)
-        
-        channel_doc.update({
-            "sections": await split_markdown_into_sections(channel_doc['content'], heading_level=3, parse_images=True),
-            "from": "Slite",
-            "client": [],
-            "type": "general",
-            "date": "",
-            "children": []
-        })
-        
-        result = {channel_doc["id"]: channel_doc}
-        
+
+        need_update = True
+        mongo_self = list(mongo_collection.find({"id": id}))
+        print(mongo_self[0]["updatedAt"].replace(tzinfo=timezone.utc), datetime.datetime.fromisoformat(channel_doc['updatedAt']))
+        if len(mongo_self) and mongo_self[0]["updatedAt"].replace(tzinfo=timezone.utc) >= datetime.datetime.fromisoformat(channel_doc['updatedAt']):
+            need_update = False
+
+        if need_update:
+            # Process attributes and columns for channel doc
+            channel_doc = process_attributes_and_columns(channel_doc)
+
+            channel_doc.update({
+                "sections": await split_markdown_into_sections(channel_doc['content'], heading_level=3, parse_images=True),
+                "from": "Slite",
+                "client": [],
+                "type": "general",
+                "date": "",
+                "children": []
+            })
+
+            result = {channel_doc["id"]: channel_doc}
+        else:
+            result = {channel_doc["id"]: mongo_self[0]}
+
         # Get children of client channel
         cursor = ""
         client_threads = []
@@ -688,9 +699,10 @@ async def process_client_channel(headers, id):
                 log_info(f"Client thread {i+1}/{len(client_threads)} completed")
             except Exception as e:
                 log_error(f"Error joining client thread {i+1}", e)
-        
-        # Upsert the main channel document
-        await upsert_document(channel_doc)
+
+        if need_update:
+            # Upsert the main channel document
+            await upsert_document(channel_doc)
         
         log_info(f"Successfully completed client channel: {id}")
         return result
@@ -821,7 +833,7 @@ async def main():
         # Step Two: Process client channel
         log_info("\n=== STEP TWO: Processing Client Channel ===")
         for id in CLIENT_CHANNEL:
-            await process_client_channel(headers, CLIENT_CHANNEL[id])
+            await process_client_channel(headers, id)
         
         log_info("\n=== EXPORT AND UPSERT PROCESS COMPLETED SUCCESSFULLY ===")
         

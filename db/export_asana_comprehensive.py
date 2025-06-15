@@ -48,22 +48,22 @@ error_lock = Lock()
 def setup_logging():
     """Setup logging configuration"""
     # Clear log files
-    with open('../log.txt', 'w') as f:
+    with open('log.txt', 'w') as f:
         f.write(f"=== Asana Export Started at {datetime.datetime.now()} ===\n")
-    with open('../error.txt', 'w') as f:
+    with open('error.txt', 'w') as f:
         f.write(f"=== Error Log Started at {datetime.datetime.now()} ===\n")
 
 def log_info(message):
     """Thread-safe logging to log.txt"""
     with log_lock:
-        with open('../log.txt', 'a', encoding='utf-8') as f:
+        with open('log.txt', 'a', encoding='utf-8') as f:
             f.write(f"{datetime.datetime.now()}: {message}\n")
         print(f"INFO: {message}")
 
 def log_error(message, error=None):
     """Thread-safe error logging to error.txt"""
     with error_lock:
-        with open('../error.txt', 'a', encoding='utf-8') as f:
+        with open('error.txt', 'a', encoding='utf-8') as f:
             f.write(f"{datetime.datetime.now()}: {message}\n")
             if error:
                 f.write(f"Error details: {str(error)}\n")

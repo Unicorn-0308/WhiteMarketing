@@ -1,10 +1,12 @@
 import asana
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 import hmac
 import hashlib
 from datetime import datetime as dt
 import asyncio
 import os
+import dotenv
+dotenv.load_dotenv()
 
 from db.export_asana_comprehensive import (
     AsanaExporter,
@@ -213,6 +215,13 @@ def establish_webhooks():
 def webhook_handler():
     """API endpoint to handle incoming webhooks"""
     try:
+        secret = request.headers.get('X-Hook-Secret', '')
+        if secret:
+            resp = make_response()
+            resp.status_code = 200
+            resp.headers['X-Hook-Secret'] = secret
+            return resp
+
         # Get project GID from query parameters
         project_gid = request.args.get('project')
         if not project_gid:
