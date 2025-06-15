@@ -3,8 +3,7 @@ from fastapi import FastAPI, Request, Response, status
 import hmac
 import hashlib
 from datetime import datetime as dt
-import asyncio
-import os
+from requests import request
 
 from db.export_asana_comprehensive import (
     AsanaExporter,
@@ -28,7 +27,7 @@ def process_event(event):
     event_info = {
         'type': event.get('type'),
         'action': event.get('action'),
-        'resource': event.get('resource', {}).get('gid'),
+        'resource': event.get('resource', {}),
         'resource_type': event.get('resource', {}).get('resource_type'),
         'parent': event.get('parent', {}).get('gid') if event.get('parent') else None,
         'created_at': event.get('created_at'),
@@ -54,11 +53,14 @@ def process_event(event):
             first=True
         )
 
+        if event.get('action') == 'added' and event.get('resource_type') == 'project':
+            request("get", f"https://whitemarketing.onrender.com/establish-webhook/{event.get('resource').get('gid')}")
+
     return event_info
 
 
 @app.get('/export-all')
-def export_all(response: Response):
+async def export_all(response: Response):
     """API endpoint to run the complete export process"""
     try:
         log_info("API: Starting export-all request")
@@ -85,50 +87,49 @@ def export_all(response: Response):
         }
 
 
-@app.get("/establish-webhook/{project_gid}")
-async def establish_webhook(project_gid: str, request: Request, response: Response):
+@app.get("/establish-webhook/{gid}")
+async def establish_webhook(gid: str, request: Request, response: Response):
     try:
-        if not project_gid:
+        if not gid:
             response.status_code = status.HTTP_400_BAD_REQUEST
             return {
                 'status': 'error',
-                'message': 'Missing project parameter'
+                'message': 'Missing resource parameter'
             }
-        log_info(f"API: Starting establish-webhook request for project {project_gid}")
+        log_info(f"API: Starting establish-webhook request for {gid}")
 
-        # Get all projects from MongoDB
-        project = global_exporter.collection.find_one({
-            "gid": project_gid
+        # Get all resources from MongoDB
+        resource = global_exporter.collection.find_one({
+            "gid": gid
         })
 
-        if not project:
-            log_error(f"API: Project {project_gid} not found in database")
+        if not resource:
+            log_error(f"API: Resource {gid} not found in database")
             response.status_code = status.HTTP_404_NOT_FOUND
             return {
                 'status': 'error',
-                'message': f'Project {project_gid} not found'
+                'message': f'Resource {gid} not found'
             }
 
-        project_gid = project.get('gid')
-        project_name = project.get('name', 'Unknown')
+        gid = resource.get('gid')
 
         server_url = request.base_url
 
         webhooks_api = asana.WebhooksApi(api_client)
 
-        if 'webhook' in project and 'gid' in project['webhook']:
+        if 'webhook' in resource and 'gid' in resource['webhook']:
             try:
-                webhooks_api.delete_webhook(project["webhook"]["gid"])
+                webhooks_api.delete_webhook(resource["webhook"]["gid"])
             except Exception as e:
                 log_error("Error while deleting old webhook", e)
 
         try:
             # Create webhook target URL
-            webhook_url = f"{server_url}webhook/{project_gid}"
+            webhook_url = f"{server_url}webhook/{gid}"
 
             # Create webhook using Asana API
             webhook_data = {
-                'resource': project_gid,
+                'resource': gid,
                 'target': webhook_url
             }
 
@@ -142,7 +143,7 @@ async def establish_webhook(project_gid: str, request: Request, response: Respon
             # Note: The actual X-Hook-Secret might be returned differently by the Asana API
             x_hook_secret = res.get('X-Hook-Secret', '')  # Adjust this based on actual API response
 
-            # Update project in MongoDB with webhook info
+            # Update resource in MongoDB with webhook info
             webhook_info = {
                 'gid': webhook_gid,
                 'x_hook_secret': x_hook_secret,
@@ -151,26 +152,26 @@ async def establish_webhook(project_gid: str, request: Request, response: Respon
             }
 
             global_exporter.collection.update_one(
-                {'gid': project_gid, 'resource_type': 'project'},
+                {'gid': gid},
                 {'$set': {'webhook': webhook_info}}
             )
 
-            log_info(f"API: Successfully established webhook for project {project_name} ({project_gid})")
+            log_info(f"API: Successfully established webhook for resource {gid}")
 
         except Exception as e:
             error_msg = str(e)
-            log_error(f"API: Failed to establish webhook for project {project_name} ({project_gid}): {error_msg}", e)
+            log_error(f"API: Failed to establish webhook for resource({resource.get('resource_type', '')}) ({gid}): {error_msg}", e)
             response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
             return {
                 'status': 'error',
-                'message': f"API: Failed to establish webhook for project {str(e)}"
+                'message': f"API: Failed to establish webhook for resource {str(e)}"
             }
 
         summary = {
             'status': 'completed'
         }
 
-        log_info(f"API: Establish-webhooks completed. Success: {project_gid}")
+        log_info(f"API: Establish-webhooks completed. Success: {gid}")
         response.status_code = status.HTTP_200_OK
         return summary
 
@@ -182,8 +183,8 @@ async def establish_webhook(project_gid: str, request: Request, response: Respon
             'message': f'Failed to establish webhooks: {str(e)}'
         }
 
-@app.post('/webhook/{project_gid}')
-async def webhook_handler(project_gid: str, request: Request, response: Response):
+@app.post('/webhook/{gid}')
+async def webhook_handler(gid: str, request: Request, response: Response):
     """API endpoint to handle incoming webhooks"""
     try:
         secret = request.headers.get('X-Hook-Secret', '')
@@ -191,38 +192,37 @@ async def webhook_handler(project_gid: str, request: Request, response: Response
             response.headers['X-Hook-Secret'] = secret
             return {'status': 'success'}
 
-        # Get project GID from query parameters
-        if not project_gid:
+        # Get resource GID from query parameters
+        if not gid:
             response.status_code = status.HTTP_400_BAD_REQUEST
             return {
                 'status': 'error',
-                'message': 'Missing project parameter'
+                'message': 'Missing resource parameter'
             }
 
-        log_info(f"API: Received webhook for project {project_gid}")
+        log_info(f"API: Received webhook for resource {gid}")
 
-        # Get project from MongoDB
-        project = global_exporter.collection.find_one({
-            'gid': project_gid,
-            'resource_type': 'project'
+        # Get resource from MongoDB
+        resource = global_exporter.collection.find_one({
+            'gid': gid
         })
 
-        if not project:
-            log_error(f"API: Project {project_gid} not found in database")
+        if not resource:
+            log_error(f"API: Resource {gid} not found in database")
             response.status_code = status.HTTP_404_NOT_FOUND
             return {
                 'status': 'error',
-                'message': f'Project {project_gid} not found'
+                'message': f'Resource {gid} not found'
             }
 
         # Get webhook info
-        webhook_info = project.get('webhook')
+        webhook_info = resource.get('webhook')
         if not webhook_info:
-            log_error(f"API: No webhook info found for project {project_gid}")
+            log_error(f"API: No webhook info found for resource {gid}")
             response.status_code = status.HTTP_400_BAD_REQUEST
             return {
                 'status': 'error',
-                'message': f'No webhook info found for project {project_gid}'
+                'message': f'No webhook info found for resource {gid}'
             }
 
         payload = await request.json()
@@ -242,14 +242,14 @@ async def webhook_handler(project_gid: str, request: Request, response: Response
                 ).hexdigest()
 
                 if not hmac.compare_digest(signature, expected_signature):
-                    log_error(f"API: Invalid webhook signature for project {project_gid}")
+                    log_error(f"API: Invalid webhook signature for resource {gid}")
                     response.status_code = status.HTTP_401_UNAUTHORIZED
                     return {
                         'status': 'error',
                         'message': 'Invalid webhook signature'
                     }
             else:
-                log_error(f"API: Missing webhook signature for project {project_gid}")
+                log_error(f"API: Missing webhook signature for resource {gid}")
                 response.status_code = status.HTTP_401_UNAUTHORIZED
                 return {
                     'status': 'error',
@@ -258,7 +258,7 @@ async def webhook_handler(project_gid: str, request: Request, response: Response
 
         # Process webhook events
         events = payload.get('events', [])
-        log_info(f"API: Processing {len(events)} events for project {project_gid}")
+        log_info(f"API: Processing {len(events)} events for resource {gid}")
 
         processed_events = []
         for event in events:
@@ -273,15 +273,15 @@ async def webhook_handler(project_gid: str, request: Request, response: Response
                 log_info(f"API: Processed event {event_info['type']}.{event_info['action']} for {event_info['resource_type']} {event_info['resource']}")
 
             except Exception as e:
-                log_error(f"API: Failed to process event for project {project_gid}", e)
+                log_error(f"API: Failed to process event for resource {gid}", e)
 
         # Log webhook processing completion
-        log_info(f"API: Successfully processed webhook for project {project_gid} with {len(processed_events)} events")
+        log_info(f"API: Successfully processed webhook for resource {gid} with {len(processed_events)} events")
 
         return {
             'status': 'success',
             'message': f'Webhook processed successfully',
-            'project_gid': project_gid,
+            'resource_gid': gid,
             'events_processed': len(processed_events),
             'events': processed_events
         }
