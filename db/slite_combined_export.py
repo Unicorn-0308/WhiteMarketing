@@ -359,9 +359,9 @@ def process_attributes_and_columns(doc_data):
             new_attributes = {}
             try:
                 for index, column in enumerate(doc_data["columns"]):
-                    if column == "Tag":
-                        s_tags = doc_data["attributes"][index].lower().split(",")
-                        new_attributes["tags"] = [tag.strip() for tag in s_tags]
+                    if column == "tags" or column == "owner":
+                        s_tags = doc_data["attributes"][index].split(",")
+                        new_attributes[column.lower()] = [tag.strip() if column == "tags" else tag.strip().replace("@", "") for tag in s_tags]
                     else:
                         new_attributes[column.lower()] = doc_data["attributes"][index]
                 
