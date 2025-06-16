@@ -997,6 +997,9 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
     if 'gid' in data and 'resource_type' in data and data['resource_type'] not in IGNORE_TYPES:
         resource_type = data['resource_type']
         gid = data['gid']
+
+        if resource_type == 'attachment':
+            return
         
         if resource_type not in space:
             space[resource_type] = {}
