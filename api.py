@@ -34,7 +34,7 @@ def process_event(event):
         'user': event.get('user', {}).get('gid') if event.get('user') else None
     }
 
-    if event.get('resource_type') == 'attachments':
+    if event.get('resource_type') == 'attachment':
         return event_info
 
     if event.get('action') == 'deleted':
