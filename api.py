@@ -25,7 +25,6 @@ app = FastAPI()
 def process_event(event):
     # Extract event information
     event_info = {
-        'type': event.get('type'),
         'action': event.get('action'),
         'resource': event.get('resource', {}),
         'resource_type': event.get('resource', {}).get('resource_type'),
@@ -345,7 +344,7 @@ async def webhook_handler(gid: str, request: Request, response: Response):
                 # Here you could add logic to update your database based on the webhook event
                 # For example, re-fetch and update the changed resource
 
-                log_info(f"API: Processed event {event_info['type']}.{event_info['action']} for {event_info['resource_type']} {event_info['resource']['gid']}")
+                log_info(f"API: Processed event {resource.get('resource_type')}.{event_info['action']} for {event_info['resource_type']} {event_info['resource']['gid']}")
 
             except Exception as e:
                 log_error(f"API: Failed to process event for resource {gid}", e)
