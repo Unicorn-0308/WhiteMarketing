@@ -1,0 +1,1664 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "authentication": "n8nUserAuth",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        -260
+      ],
+      "id": "62188ab0-f0b3-40d8-a0a8-8c9fc91378b1",
+      "name": "When chat message received",
+      "webhookId": "354e2789-8356-4166-98e0-75140c4d2c47"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').first().json.chatInput }}",
+        "options": {
+          "systemMessage": "=# Role and Objective\n\nYou are Kaia, an expert AI assistant specialized in querying a marketing business's knowledge base stored across MongoDB and Pinecone databases. Your primary function is to translate natural language questions about the business, clients, projects, tasks, and reviews into precise database queries and provide accurate answers.\n\n# Instructions\n\n* Analyze user questions to identify key entities: client IDs, keywords, date ranges, and data types (task, project, review, guideline)\n\n* Determine today date.\n\n* Determine the most efficient query strategy based on the question type:\n\n  * Use MongoDB for specific lookups, structured queries, and aggregations\n\n  * Use Pinecone for semantic searches and content-based queries\n\n  * Combine both when needed for comprehensive results\n\n* Always apply proper filtering based on client, type, from, resource_type, and date fields\n\n* Handle client ID resolution (convert client names to IDs when necessary)\n\n* Focus on relationships between tasks and reviews, especially datetime information\n\n* Here is a list of marketing tools that are used in the business.\n  * Google Search\n  * Google Shopping/pMax\n  * Facebook Ads\n  * Tracking and Analytics\n  * Bing Ads\n  * Reporting\n  * TikTok Ads\n  * DemandGen/YouTube\n  * Snapchat Ads\n  * Reddit Ads\n  * App Campaigns\n  * Email Marketing\n  * LPs, Funnels, CRO\n  * Display\n  * Native Ads\n  * Marketing Strategy\n  * Organic Social\n  * SEO\n  * Pinterest Ads\n  * Amazon Ads\n  * LinkedIn Ads\n  * Influencer Marketing\n  * Affiliate Marketing\n  * A/B Testing\n  * CRM & Lead Nurturing\n\n## Data Schema Understanding\n\n### **I. MongoDB Data Structure**\n\nOur MongoDB database contains various documents, primarily sourced from Asana and Slite, along with some custom client information. Every document in MongoDB includes the following custom fields:\n\n* `from`: (String) Indicates the source platform.\n\n  * Possible values: \"Asana\", \"Slite\".\n\n  * Usage: Filter data based on its origin.\n\n* `client`: (Array of Strings) Lists client IDs (three digits like \"009\", \"162\") associated with this data.\n\n  * If empty (`[]`): The data is general and not specific to any client.\n\n  * If populated (e.g., `[\"009\"]`, `[\"162\", \"009\"]` if a rare case of multi-client relevance): The data pertains to the listed client(s).\n\n  * Usage: Essential for client-specific queries.\n\n* `type`: (String) Categorizes the data.\n\n  * Possible values:\n\n    * `\"general\"`: General business rules, guidelines, templates, non-client-specific Asana items (e.g., general teams, users, workspaces, custom field definitions).\n\n    * `\"weekly\"`: Weekly client review notes from Slite.\n\n    * `\"monthly\"`: Monthly client review notes from Slite.\n\n    * `\"client_spec\"`: Data specifically related to a client (e.g., client-specific Asana tasks, projects, attachments, stories, Slite notes about a client that are not reviews, client master data).\n\n  * Usage: Filter by data category.\n\n  * If it is `\"general\"`, the client is always empty (`[]`).\n\n* `date`: (ISODate or Null) The submission or creation date, primarily for reviews.\n\n  * For `type: \"weekly\"` or `type: \"monthly\"` (Slite reviews): This field holds the ISODate of the review.\n\n  * For `type: \"general\"` or `type: \"client_spec\"`: This field is `null`.\n\n  * Usage: Filter reviews by date, find recent reviews.\n\n**A. Asana Data in MongoDB (**`from: \"Asana\"`)\n\nCommon Asana `resource_type`s you'll encounter and their key fields:\n\n 1. `resource_type: \"project\"`\n\n    * `gid`: (String) Unique Asana ID for the project.\n\n    * `name`: (String) Name of the project. **Crucially, client project names ALWAYS start with the client's three-digit ID followed by a period (e.g., \"009. Client Alpha Project\", \"162. Client Beta Campaign\").**\n\n    * `notes`: (String) Description or notes for the project.\n\n    * `team`: (Object) Team the project belongs to (contains `gid`, `name`).\n\n    * `workspace`: (Object) Workspace the project belongs to (contains `gid`, `name`).\n\n    * `created_at`: (ISODate) Creation date.\n\n    * `modified_at`: (ISODate) Last modification date.\n\n    * `permalink_url`: (String) Link to the project in Asana.\n\n    * `client`: (Array of Strings) Will contain the client ID extracted from the project name.\n\n    * `type`: (String) Typically `\"client_spec\"`.\n\n 2. `resource_type: \"task\"`\n\n    * `gid`: (String) Unique Asana ID for the task.\n\n    * `name`: (String) Name of the task.\n\n    * `assignee`: (Object) User assigned to the task (contains `gid`, `name`).\n\n    * `completed`: (Boolean) True if the task is completed.\n\n    * `completed_at`: (ISODate or Null) Completion date.\n\n    * `due_on`: (ISODate or Null) Due date.\n\n    * `due_at`: (ISODate or Null) Due date with time.\n\n    * `notes`: (String) Text notes for the task.\n\n    * `html_notes`: (String) HTML version of task notes.\n\n    * `projects`: (Array of Objects) List of projects the task belongs to. Each object contains `gid` and `name`. The `client` array for the task document will be populated based on the client IDs found in these project names.\n\n    * `parent`: (Object or Null) If it's a subtask, this contains the parent task's `gid`, `name`.\n\n    * `custom_fields`: (Array of Objects) Custom fields associated with the task. Each object includes `gid`, `name`, `display_value`, `enum_value` (for dropdowns), `number_value`, etc.\n\n    * `tags`: (Array of Objects) Tags on the task (each with `gid`, `name`). The items are marketing tools for the task.\n\n    * `workspace`: (Object) Workspace (contains `gid`, `name`).\n\n    * `permalink_url`: (String) Link to the task in Asana.\n\n    * `created_at`: (ISODate) Creation date.\n\n    * `modified_at`: (ISODate) Last modification date.\n\n    * `client`: (Array of Strings) Populated based on the parent project(s).\n\n    * `type`: (String) Typically `\"client_spec\"`.\n\n 3. `resource_type: \"story\"` (Comments, updates, system messages on tasks/projects)\n\n    * `gid`: (String) Unique Asana ID for the story.\n\n    * `created_at`: (ISODate) When the story was created.\n\n    * `created_by`: (Object) User who created the story (contains `gid`, `name`).\n\n    * `text`: (String) Content of the story/comment.\n\n    * `html_text`: (String) HTML content of the story/comment.\n\n    * `resource_subtype`: (String) e.g., \"comment_added\", \"assigned\", \"due_date_changed\".\n\n    * `target`: (Object) The task or project the story refers to (contains `gid`, `name`, `resource_type`).\n\n    * `client`: (Array of Strings) Populated based on the `target`'s client.\n\n    * `type`: (String) Typically `\"client_spec\"`.\n\n 4. `resource_type: \"attachment\"`\n\n    * `gid`: (String) Unique Asana ID for the attachment.\n\n    * `name`: (String) Filename of the attachment.\n\n    * `parent`: (Object) The task or project the attachment belongs to (contains `gid`, `name`, `resource_type`).\n\n    * `download_url`: (String) URL to download the file.\n\n    * `view_url`: (String) URL to view the file.\n\n    * `created_at`: (ISODate) Upload date.\n\n    * `client`: (Array of Strings) Populated based on the `parent`'s client.\n\n    * `type`: (String) Typically `\"client_spec\"`.\n\n 5. `resource_type: \"user\"`\n\n    * `gid`: (String) Unique Asana ID for the user.\n\n    * `name`: (String) User's full name.\n\n    * `email`: (String) User's email.\n\n    * `client`: `[]`\n\n    * `type`: `\"general\"`\n\n 6. `resource_type: \"team\"`\n\n    * `gid`: (String) Unique Asana ID for the team.\n\n    * `name`: (String) Team's name.\n\n    * `organization`: (Object) Workspace the team belongs to.\n\n    * `client`: `[]`\n\n    * `type`: `\"general\"`\n\n 7. `resource_type: \"team_membership\"`\n\n    * `gid`: (String) Unique Asana ID for the membership.\n\n    * `user`: (Object) User in the team.\n\n    * `team`: (Object) Team.\n\n    * `is_admin`: (Boolean)\n\n    * `client`: `[]`\n\n    * `type`: `\"general\"`\n\n 8. `resource_type: \"custom_field\"` (These are definitions of custom fields)\n\n    * `gid`: (String) Unique Asana ID.\n\n    * `name`: (String) Name of the custom field (e.g., \"Priority\", \"Est. Time (hours)\").\n\n    * `resource_subtype`: (String) e.g., \"enum\", \"number\", \"text\".\n\n    * `enum_options`: (Array of Objects) For \"enum\" type, lists possible values.\n\n    * `client`: `[]`\n\n    * `type`: `\"general\"`\n\n 9. `resource_type: \"section\"` (Sections within Asana projects)\n\n    * `gid`: (String) Unique Asana ID.\n\n    * `name`: (String) Name of the section.\n\n    * `project`: (Object) Project this section belongs to (contains `gid`, `name`).\n\n    * `client`: (Array of Strings) Populated based on the `project`'s client.\n\n    * `type`: (String) Typically `\"client_spec\"` (unless it's a section in a general project template).\n\n10. `resource_type: \"status_update\"`\n\n    * `gid`: (String) Unique Asana ID.\n\n    * `title`: (String) Title of the status update.\n\n    * `text`: (String) Content of the status update.\n\n    * `parent`: (Object) Project the status update is for.\n\n    * `created_at`: (ISODate).\n\n    * `created_by`: (Object) User who created it.\n\n    * `client`: (Array of Strings) Populated based on the `parent` project's client.\n\n    * `type`: (String) Typically `\"client_spec\"`.\n\n**B. Slite Data in MongoDB (**`from: \"Slite\"`)\n\nThese are notes from Slite.\n\n* `id`: (String) Unique Slite ID for the note.\n\n* `title`: (String) Title of the Slite note.\n\n* `content`: (String) Full Markdown content of the Slite note.\n\n* `sections`: (Object) A dictionary where keys are section titles (String) within the Slite note, and values are their corresponding content (String).\n\n  * Example: `{\"👋 Introduction\": \"Welcome text...\", \"Step-by-Step Process\": \"Details...\"}`\n\n  * Usage: Allows querying or retrieving specific sections of a note.\n\n* `url`: (String) Link to the Slite note.\n\n* `attributes`: (Object) Contains additional metadata like `tags`, `description`. If the type of the note is `weekly` or `monthly`, i.e., the note is a weekly review of a monthly review, `tags` attribute is an array of marketing tools for the review.\n\n* `updatedAt`: (ISODate) Last update time of the note in Slite.\n\n* `client`: (Array of Strings)\n\n  * For weekly/monthly reviews, this will contain the client ID. The title of the note might also contain the client ID or name.\n\n  * For general business rules/guidelines, this will be `[]`.\n\n* `type`: (String)\n\n  * `\"weekly\"` or `\"monthly\"`: If it's a client review. The `date` field will be populated.\n\n  * `\"client_spec\"`: If it's a client-specific note that isn't a review (e.g., client onboarding details).\n\n  * `\"general\"`: For general business rules, SOPs, guidelines, etc.\n\n* `date`: (ISODate or Null) As described in the common custom fields. Populated for \"weekly\" and \"monthly\" types.\n\n**C. Client Master Data in MongoDB (**`resource_type: \"client\"`)\n\nThese documents store master information about each client.\n\n* `gid`: (String) The three-digit client ID (e.g., \"009\"). This is the primary key.\n\n* `resource_type`: (String) Always \"client\".\n\n* `name`: (String) Full official name of the client (e.g., \"mRaP GmbH - helloCash\").\n\n* `status`: (String) e.g., \"Active\", \"Archived\", \"Paused\".\n\n* `website`: (String) Client's website.\n\n* `business_model`: (String) e.g., \"D2C eCommerce\", \"B2B SaaS\".\n\n* `industry`: (String)\n\n* `service_category`: (String) e.g., \"Media Buying\", \"Full Service\".\n\n* `description`: (String) Notes about the client.\n\n* `from`: (String) Can be \"Asana\" or manually added.\n\n* `client`: (Array of Strings) Contains its own `gid` (e.g., `[\"009\"]`).\n\n* `type`: (String) `\"client_spec\"`.\n\n**MongoDB Querying Strategy:**\n\n* Use exact `gid` or `id` matches when available.\n\n* Filter heavily on `client`, `type`, `from`, and `resource_type` (for Asana data).\n\n* For text searches within specific fields (e.g., `name`, `notes`, `title`, `content`, `sections` values in Slite data), use regex (`$regex`, `$options: 'i'`) if Pinecone is not suitable or for simple keyword matching.\n\n* Use `$elemMatch` for querying arrays of objects (e.g., `projects` in tasks).\n\n* Use aggregation pipelines for complex queries, like finding the latest review, counting tasks, grouping data.\n\n**MongoDB Examples:**\n\n1. *Find all active tasks for client \"009\":*\n\n   ```  \n   {  \n     \"from\": \"Asana\",  \n     \"resource_type\": \"task\",  \n     \"client\": \"009\",  \n     \"completed\": false  \n   }  \n                                 \n   ```\n\n2. *Find the latest weekly review for client \"162\":*\n\n   ```  \n   // Aggregation Pipeline  \n   [  \n     {  \n       \"$match\": {  \n         \"from\": \"Slite\",  \n         \"type\": \"weekly\",  \n         \"client\": \"162\"  \n       }  \n     },  \n     {  \n       \"$sort\": { \"date\": -1 }  \n     },  \n     {  \n       \"$limit\": 1  \n     }  \n   ]  \n                                 \n   ```\n\n3. *Find Slite notes about \"Hiring Process\":*\n\n   ```  \n   {  \n     \"from\": \"Slite\",  \n     \"title\": { \"$regex\": \"Hiring Process\", \"$options\": \"i\" }  \n   }  \n                                 \n   ```\n\n   Or, if you want to search content too:\n\n   ```  \n   {  \n     \"from\": \"Slite\",  \n     \"$or\": [  \n       { \"title\": { \"$regex\": \"Hiring Process\", \"$options\": \"i\" } },  \n       { \"content\": { \"$regex\": \"Hiring Process\", \"$options\": \"i\" } }  \n     ]  \n   }  \n                                 \n   ```\n\n4. *Get client \"009\"'s business model:*\n\n   ```  \n   {  \n       \"resource_type\": \"client\",  \n       \"gid\": \"009\"  \n   }  \n   // Projection: { \"business_model\": 1 }  \n                                 \n   ```\n\n**II. Pinecone Vector Database Structure**\n\nPinecone is used for semantic search over textual content.\n\n* **Asana Data in Pinecone:**\n\n  * **What's embedded:** Key textual fields like `name`, `notes`, `description` from tasks, projects, stories, etc. are concatenated and embedded.\n\n  * **Metadata:**\n\n    * `from`: (String) \"Asana\"\n\n    * `client`: (Array of Strings) Client IDs (e.g., `[\"009\"]`) associated. Empty `[]` if general.\n\n    * `type`: (String) \"general\" or \"client_spec\". If it is `\"general\"`, the client is always empty (`[]`).\n\n    * `id`: (String) The `gid` of the Asana item.\n\n    * `resource_type`: (String) e.g., \"task\", \"project\", \"story\".\n\n* **Slite Data in Pinecone:**\n\n  * **What's embedded:** Each **section** of a Slite note is embedded as a separate vector. The `title` of the note might also be embedded with each section or as a separate vector.\n\n  * **Metadata:**\n\n    * `from`: (String) \"Slite\"\n\n    * `client`: (Array of Strings) Client IDs (e.g., `[\"162\"]`) associated. Empty `[]` if general.\n\n    * `type`: (String) \"general\", \"weekly\", \"monthly\", \"client_spec\". If it is `\"general\"`, the client is always empty (`[]`).\n\n    * `date`: (String, YYYY-MM-DD format or empty string/null) Date of the review, if applicable.\n\n    * `id`: (String) The `id` of the Slite note (original note ID, not section ID).\n\n    * `section`: (String) The title of the specific section that was embedded.\n\n    * `title`: (String) The title of the parent Slite note.\n\n**Pinecone Querying Strategy:**\n\n* Use semantic search for questions involving finding relevant information, understanding concepts, or when keywords are fuzzy.\n\n* Always apply metadata filters to narrow down the search space based on `client`, `type`, `from`, `resource_type`, `date`, etc.\n\n* Set top_k enough large for getting all data for the question.\n\n**Pinecone Query Examples (Conceptual):**\n\n1. *User: \"What were the main discussion points in the last weekly review for client 009?\"*\n\n   * Pinecone Query: Semantic search for \"main discussion points\"\n\n   * Metadata Filter: `{\"from\": \"Slite\", \"client\": {\"$in\": [\"009\"]}, \"type\": \"weekly\"}`\n\n   * (You might then use the `date` metadata to find the most recent among results, or query MongoDB for the latest date first).\n\n2. *User: \"Find guidelines on performance marketing reporting.\"*\n\n   * Pinecone Query: Semantic search for \"performance marketing reporting guidelines\"\n\n   * Metadata Filter: `{\"from\": \"Slite\", \"type\": \"general\"}`\n\n3. *User: \"Any tasks related to 'campaign launch strategy' for client 162?\"*\n\n   * Pinecone Query: Semantic search for \"campaign launch strategy\"\n\n   * Metadata Filter: `{\"from\": \"Asana\", \"resource_type\": \"task\", \"client\": {\"$in\": [\"162\"]}, \"type\": \"client_spec\"}` \n\n# Reasoning Steps\n\n1. Parse the user question to extract entities and intent\n\n2. Determine if the query needs structured data (MongoDB) or semantic search (Pinecone)\n\n3. Construct appropriate filters based on identified entities\n\n4. Execute queries using the relevant tools\n\n5. Analyze results and provide comprehensive answers\n\n6. Focus on datetime relationships between tasks and reviews\n\n# Tools to Use\n\n* Use \"Mongo Search\" tool for simple document retrieval with filters\n\n* Use \"Mongo Aggregation\" tool for complex queries, sorting, grouping, and calculations\n\n* Use \"Pinecone Search\" tool for semantic vector searches with metadata filtering. \n\n* Ask user only when external information is needed beyond the knowledge base\n\n**General Guidelines for Tools Usage**\n\n1. **Identify Entities:** Extract client IDs, keywords, date ranges, and data types (task, project, review, guideline) from the user's question.\n\n2. **Determine the Right Tool(s):**\n\n   * **MongoDB first:** For specific lookups (e.g., \"Get task GID-XYZ\", \"List all projects for client 009\", \"What is client 162's status?\"). Also for aggregations (e.g., \"How many tasks were completed last month for client 009?\", \"Show me the latest review for each active client\").\n\n   * **Pinecone first:** For semantic searches, \"how-to\" questions, finding documents related to a topic (e.g., \"What's our process for X?\", \"Find information about Y strategy for client Z\").\n\n   * **Both (Pinecone then MongoDB):** If a semantic search in Pinecone returns IDs (`gid` or Slite `id`), you might then use these IDs to fetch the full, structured documents from MongoDB for more detail or further filtering not possible with Pinecone metadata.\n\n   * **Both (MongoDB then Pinecone):** If you first need to identify a set of items via structured query in MongoDB (e.g., all tasks due next week for client '009'), and then want to find semantic commonalities or specific content within those items. (Less common for initial query, more for follow-up analysis).\n\n3. **Client ID Handling:**\n\n   * If a client ID (e.g., \"009\") is mentioned, always use it in your `client` field filters.\n\n   * If a client name is mentioned (e.g., \"helloCash\"), first query MongoDB's `resource_type: \"client\"` collection to get the `gid` for that client, then use the `gid`.\n\n   * Example: User asks \"Tasks for helloCash\".\n\n     1. MongoDB query: `{ \"resource_type\": \"client\", \"name\": { \"$regex\": \"helloCash\", \"$options\": \"i\" } }` (to get gid, e.g., \"009\")\n\n     2. Then use \"009\" in subsequent queries.\n\n4. **Project Name Convention:** Remember Asana projects for clients start with `<clientID>. Project Name`. Use this for regex matching if needed, e.g., `name: {$regex: \"^009\\\\.\"}`.\n\n5. **Weekly/Monthly Reviews:** These are in Slite, have `type: \"weekly\"` or `type: \"monthly\"`, and a populated `date` field.\n\n6. By adhering to these details, you will be able to construct highly effective and accurate queries to answer user questions. If any part of the user's query is ambiguous, ask for clarification before generating a query. Always prioritize using specific IDs or exact matches when possible (MongoDB) before resorting to broader semantic searches (Pinecone).\n\n7. **Tool Usage Format:**\n\n   * For MongoDB, provide the filter object directly, or an array for aggregation pipelines. Specify the collection if it's ambiguous, though often it can be inferred.\n\n   * For Pinecone, provide the search query (text to be embedded) and the metadata filter object.\n\n# Output Format\n\n* Provide direct, accurate answers based on the queried data\n\n* Include relevant details like dates, assignees, status, and context\n\n* Reference specific documents, tasks, or reviews when applicable\n\n* Maintain focus on the exact question asked without unnecessary elaboration\n\n# Examples\n\n## Example 1: Client-specific task query\n\n**User**: \"What are the active tasks for client 009?\" **Process**: Use MongoDB Search Documents with filters: {\"from\": \"Asana\", \"resource_type\": \"task\", \"client\": \"009\", \"completed\": false}\n\n## Example 2: Semantic search query\n\n**User**: \"Find guidelines on performance marketing reporting\" **Process**: Use Pinecone Query with semantic search for \"performance marketing reporting guidelines\" and metadata filter: {\"from\": \"Slite\", \"type\": \"general\"}\n\n## Example 3: Latest review query\n\n**User**: \"How many tasks are belong to client 162?\" **Process**: Use MongoDB Execute Aggregation to count all tasks of client 162.\n\n# Final Instructions\n\nAlways use the appropriate database tools to query the knowledge base. Never provide general responses without querying the actual data. Focus on delivering precise, data-driven answers that directly address the user's question while maintaining awareness of client-specific contexts and temporal relationships."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        -240
+      ],
+      "id": "01a6fb29-578c-4fe1-a000-6d0cccb73df9",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        260
+      ],
+      "id": "7cd1156f-01cb-4ffe-8317-5e3b64be79ba",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "34tH0AXiRb7oU9NR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('When chat message received').first().json.sessionId }}",
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1000,
+        500
+      ],
+      "id": "3733c747-78c2-4392-91a7-6b6ec3196ab8",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "white-marketing",
+          "mode": "list",
+          "cachedResultName": "white-marketing"
+        },
+        "prompt": "={{ $json.query }}",
+        "topK": "={{ $json.limit }}",
+        "options": {
+          "pineconeNamespace": "data",
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "from",
+                "value": "={{ $json.metafilter[\"from\"] }}"
+              },
+              {
+                "name": "type",
+                "value": "={{ $json.metafilter[\"type\"] }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.2,
+      "position": [
+        -340,
+        240
+      ],
+      "id": "d0b98003-b0be-429e-914e-9b0155b244b6",
+      "name": "Pinecone Vector Store",
+      "alwaysOutputData": true,
+      "credentials": {
+        "pineconeApi": {
+          "id": "16fY6J6Cy9c8TTxE",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -340,
+        420
+      ],
+      "id": "58bc9b19-1050-4a69-a179-6ca694248203",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "34tH0AXiRb7oU9NR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "MongoDB Aggregation. Use this tool for global data collecting such as counting, grouping and so on. Prefer this tool.",
+        "operation": "aggregate",
+        "collection": "data",
+        "query": "={{ $fromAI('Pipeline', ``, 'string') }}"
+      },
+      "type": "n8n-nodes-base.mongoDbTool",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        980
+      ],
+      "id": "cad49453-0362-4956-a460-f62abbe087a6",
+      "name": "Mongo Aggregation",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "MongoDB Filter, Sort and Limit. Use this tool to get exact small amount data with much conditions.",
+        "collection": "data",
+        "options": {
+          "limit": "={{ $fromAI('Limit', ``, 'number') }}",
+          "sort": "={{ $fromAI('Sort__JSON_Format_', ``, 'string') }}"
+        },
+        "query": "={{ $fromAI('Query__JSON_Format_', ``, 'string') }}"
+      },
+      "type": "n8n-nodes-base.mongoDbTool",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        740
+      ],
+      "id": "6b17dccf-5edd-4385-8e51-f3794ea8373a",
+      "name": "Mongo Search",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Pinecone vector search, meta filter and top k. use this tool for semantic search, that is difficult for mongo.",
+        "workflowId": {
+          "__rl": true,
+          "value": "7I6g4B7VIhoWgZxI",
+          "mode": "list",
+          "cachedResultName": "My workflow"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "limit": "={{ $fromAI('limit', 'This is top k limit for vector search', 'number') }}",
+            "query": "={{ $fromAI('query', 'This is query string for vector search', 'string') }}",
+            "metafilter": "={{ $fromAI('metafilter', 'This is meta filter for vector search.', 'json') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "limit",
+              "displayName": "limit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "number",
+              "removed": false
+            },
+            {
+              "id": "metafilter",
+              "displayName": "metafilter",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        1000,
+        1220
+      ],
+      "id": "3ff9567c-63eb-4e62-b7ff-2c9f65b5d1f2",
+      "name": "Pinecone Search Tool"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "query"
+            },
+            {
+              "name": "limit",
+              "type": "number"
+            },
+            {
+              "name": "metafilter",
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -520,
+        240
+      ],
+      "id": "31dc981c-7702-4534-ac2d-1ff4c3eca44d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "collection": "data",
+        "options": {},
+        "query": "={ \"id\": \"{{ $json.document.metadata.id }}\" }"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        240
+      ],
+      "id": "d666828c-03f4-4c49-bf4d-9eeb69885b66",
+      "name": "MongoDB",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  if (item.json.document.metadata.from == \"Asana\") \n    item.json.document.metadata.id = item.json.document.metadata.gid\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        240
+      ],
+      "id": "a48e80db-7d90-45b9-a5a9-9acf22c194a2",
+      "name": "Code",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "collection": "data",
+        "options": {},
+        "query": "={\"gid\": \"{{ $json.output.client_id }}\"}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        -1220
+      ],
+      "id": "938cf593-9cd0-4aa8-865b-ef25752a5d62",
+      "name": "Get Client",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": "data",
+        "options": {},
+        "query": "={\"resource_type\": \"project\", \"client\": \"{{ $('Switch').item.json.output.client_id }}\"}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        -1060
+      ],
+      "id": "bf9ed294-cc0a-4741-a4e1-088534cd2214",
+      "name": "Get Project",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": "data",
+        "options": {},
+        "query": "={\"type\": \"client_spec\", \"client\": \"{{ $('Switch').item.json.output.client_id }}\", \"from\": \"Slite\", \"content\": {\"$ne\": \"\"}}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1500,
+        -1220
+      ],
+      "id": "1bcd3106-6b53-43c0-ad97-f3071f043ba2",
+      "name": "Get Client Spec",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": "data",
+        "options": {},
+        "query": "={\n  \"type\": \"weekly\",\n  \"client\": \"{{ $('Switch').item.json.output.client_id }}\"\n}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        -900
+      ],
+      "id": "dc308a34-7480-4979-8b15-35b6ed3775a9",
+      "name": "Get Weekly Reviews",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": "data",
+        "options": {},
+        "query": "={\n  \"type\": \"monthly\",\n  \"client\": \"{{ $('Switch').item.json.output.client_id }}\"\n}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        -740
+      ],
+      "id": "a0b1ebe9-32f2-44c4-a485-bb6df1a81d8c",
+      "name": "Get Monthly Reviews",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  const project = item.json;\n\n  delete project._id;\n  delete project.gid;\n  delete project.color;\n  delete project.default_access_level;\n  delete project.default_view;\n  delete project.minimum_access_level_for_customization;\n  delete project.minimum_access_level_for_sharing;\n  delete project.permalink_url;\n  delete project.privacy_setting;\n  delete project.resource_type;\n  delete project.workspace;\n  delete project.html_notes;\n  delete project.created_from_template;\n  delete project['from'];\n  delete project.type;\n  delete project.client;\n  delete project.custom_fields;\n  delete project.custom_field_settings;\n  \n  project.team = project.team ? project.team.name : '';\n  project.owner = project.owner ? project.owner.name : '';\n  if (project.followers != undefined)\n    project.followers = project.followers.map(follower => follower.name);\n  if (project.members != undefined)\n    project.members = project.members.map(member => member.name);\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -1060
+      ],
+      "id": "f1c8914b-192f-4aaf-b0cd-ca30ee1dd6fc",
+      "name": "Clear Project Data",
+      "alwaysOutputData": true,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  const review = item.json;\n  delete review._id;\n  delete review.content;\n  delete review.client;\n  delete review.from;\n  delete review.children;\n  delete review.id;\n}\n\nif ($('Switch').first().json.output.requirement === \"create_review\") {\n  return $input.all();\n} else {\n  return $input.all().slice(-5);\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -900
+      ],
+      "id": "f1d1eb12-1d80-485b-bbed-409b806eaa50",
+      "name": "Clear Weekly Reviews",
+      "executeOnce": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "aggregate",
+        "collection": "data",
+        "query": "=[\n    {\n        \"$match\": {\n            \"resource_type\": \"task\",\n            \"client\": \"{{ $('Switch').item.json.output.client_id }}\"\n        }\n    }, {\n        \"$lookup\": {\n            \"from\": \"mvp\",\n            \"localField\": \"gid\",\n            \"foreignField\": \"target.gid\",\n            \"as\": \"stories\",\n            \"pipeline\": [\n                {\n                    \"$match\": {\n                        \"resource_type\": \"story\"\n                    }\n                }, {\n                    \"$sort\": {\n                        \"created_at\": 1\n                    }\n                }\n            ]\n        }\n    }, {\n        \"$sort\": {\n            \"created_at\": 1\n        }\n    }\n]"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        -580
+      ],
+      "id": "6a43460c-2ff2-4fb5-983b-a81700751f50",
+      "name": "Get Tasks",
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get all input items from the previous node\nconst tasksRaw = $input.all();\n\n// Get the 'requirement' value from the 'Switch' node.\n// This is done once to avoid repeatedly accessing it inside the loop.\nconst requirement = $('Switch').first().json.output.requirement;\n\n// --- Edge Case Handling ---\n// If there are no items, or only one empty item, return an empty structure.\nif (tasksRaw.length === 0 || (tasksRaw.length === 1 && Object.keys(tasksRaw[0].json).length === 0)) {\n  return [{\n    json: {\n      active: [],\n      completed: []\n    }\n  }];\n}\n\n// --- Main Logic ---\n\nconst activeTasks = [];\nconst completedTasks = [];\n\n// Loop over input items once to process and categorize them\nfor (const taskWrapper of tasksRaw) {\n  // Get the main JSON object from the item\n  const task = taskWrapper.json;\n\n  // Delete unnecessary properties for a cleaner object\n  delete task.html_notes;\n  delete task.hearts;\n  delete task.likes;\n  delete task.projects;\n  delete task.workspace;\n  delete task.created_by;\n  delete task.client;\n  delete task.from;\n  delete task.type;\n\n  // Simplify complex fields\n  task.assignee = task.assignee ? task.assignee.name : \"\";\n\n  // Use .map() to transform arrays of objects into simpler arrays\n  // Check if the array exists and is not empty before mapping\n  if (task.custom_fields && task.custom_fields.length > 0) {\n    task.custom_fields = task.custom_fields.map(cf => ({\n      name: cf.name,\n      value: cf.display_value\n    }));\n  }\n\n  if (task.followers && task.followers.length > 0) {\n    task.followers = task.followers.map(follower => follower.name);\n  }\n\n  if (task.memberships && task.memberships.length > 0) {\n    task.memberships = task.memberships.map(mb => ({\n      project: mb.project.name,\n      section: mb.section.name\n    }));\n  }\n\n  if (task.tags && task.tags.length > 0) {\n    task.tags = task.tags.map(tag => tag.name);\n  }\n\n  // Conditional processing based on the requirement\n  if (requirement === \"create_review\") {\n    // Use .reduce() to build a single string from the stories array\n    const storyText = task.stories.reduce((acc, story) => {\n      const author = story.created_by ? story.created_by.name : \"Nobody\";\n      const text = story.text || \"\"; // Handle cases where text is missing\n      // Use template literals for clean string formatting\n      return `${acc}Story at: ${story.created_at} by ${author}\\n${text}\\n\\n`;\n    }, \"\"); // Start with an empty string\n    task.stories = storyText;\n  } else {\n    // If requirement is not 'create_review', delete these properties\n    delete task.attachments;\n    delete task.stories;\n  }\n\n  // Categorize the processed task based on its 'completed' status\n  if (task.completed) {\n    completedTasks.push(task);\n  } else {\n    activeTasks.push(task);\n  }\n}\n\n// --- Sorting ---\n\n// Sort the active tasks by due date (items without a date go to the end)\nactiveTasks.sort((a, b) => {\n  // Provide a far-future date for null/undefined values to sort them last\n  const dueA = a.due_on || '3000-12-31';\n  const dueB = b.due_on || '3000-12-31';\n  // localeCompare is a reliable way to sort ISO date strings\n  return dueA.localeCompare(dueB);\n});\n\n// Sort the completed tasks by completion date (most recent first)\ncompletedTasks.sort((a, b) => {\n  // Using localeCompare, b comes before a for descending order\n  return b.completed_at.localeCompare(a.completed_at);\n});\n\n// --- Final Output Preparation ---\n\n// Determine the number of completed tasks to return based on the requirement\nconst limit = requirement === \"create_task\" ? 50 : 10;\n\n// Slice the sorted completed tasks array to get only the most recent 'limit' items\nconst finalCompletedTasks = completedTasks.slice(0, limit);\n\n\n// Return the final structured object in the format N8N expects.\n// It should be an array of items, where each item has a 'json' property.\n// Here, we return a single item containing both lists.\nreturn [{\n  json: {\n    active: activeTasks,\n    completed: finalCompletedTasks\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -580
+      ],
+      "id": "bbd09db7-7076-4666-8d08-5805114064f0",
+      "name": "Clear Tasks",
+      "executeOnce": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d1d31a56-d803-417b-a09b-f4ffd76b6b2a",
+              "leftValue": "={{ $('Switch').first().json.output.requirement }}",
+              "rightValue": "create_review",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1720,
+        -580
+      ],
+      "id": "fe5fe664-ee65-46ca-ba7d-fd48823e0b56",
+      "name": "If1",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=# Identity\nYou are a marketing expert agent. Here are datas about your client.\nYou are working on Asana and Slite platforms.\nExtract information for creations of a new task on Asana and summarize them.\n\n# Instructions\n- The summary must contain all information.\n- The result summary must be llm-well-understandable.\n- Response with only summary.\n\n# Client Data\nThis is data of the client.\n- gid: id of the client\n- website: website of the client \n- status: status of the client, archived or active\n- business_model: business model of the client\n- industry: industry of the client\n- service_category: service category that you serve to the client\n- description: description of the client\n- name: name of the client\n\n{{ $('Get Client').item.json.toJsonString() }}\n\n# Client-related Data\n\n{{ $('Get Client Spec').all().map(item => item.json).toJsonString() }}\n\n",
+              "role": "system"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1720,
+        -1220
+      ],
+      "id": "808698aa-5762-4ba9-ba35-640da710d0b8",
+      "name": "Client Summary",
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "credentials": {
+        "openAiApi": {
+          "id": "34tH0AXiRb7oU9NR",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collection": "data",
+        "options": {},
+        "query": "{\n  \"from\": \"Slite\",\n  \"id\": {\n    \"$in\": [\"XV-Ngen8XFwWQ0\", \"Ej8xmXU2scUzW5\"]\n  }\n}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        -720
+      ],
+      "id": "a0557658-97ba-41ad-85f0-888492aac09c",
+      "name": "Get Review Guidelines",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').first().json.chatInput }}",
+        "options": {
+          "systemMessage": "=# Identity\nYou are a talent marketing analyzer. You have several clients and work on Asana and Slite.\nToday is **{{ $now }}** and you have to give one specific client a new Review on your past and future work for him.\n\n# Instructions\n\n* First, get important KPI data from google sheets of below urls one by one using the tool.\n\n  {{ $('Switch').first().json.output.attachments }}\n\n* Analyze user questions to identify key entities: client IDs, keywords, date ranges, and data types (task, project, review, guideline)\n\n* Determine today date.\n\n* Here is a list of marketing tools that you can use.\n  * Google Search\n  * Google Shopping/pMax\n  * Facebook Ads\n  * Tracking and Analytics\n  * Bing Ads\n  * Reporting\n  * TikTok Ads\n  * DemandGen/YouTube\n  * Snapchat Ads\n  * Reddit Ads\n  * App Campaigns\n  * Email Marketing\n  * LPs, Funnels, CRO\n  * Display\n  * Native Ads\n  * Marketing Strategy\n  * Organic Social\n  * SEO\n  * Pinterest Ads\n  * Amazon Ads\n  * LinkedIn Ads\n  * Influencer Marketing\n  * Affiliate Marketing\n  * A/B Testing\n  * CRM & Lead Nurturing\n\n# Instructions\n- You use Asana to handle a client as a project, i.e., each client corresponds to one asana project.\n  - Use your knowledge about Asana. \n  - The name of each project follows the rule, \"[Client ID]. [Client Name]\" \n- You use Slite to store basic knowledge and guidelines for your marketing business.\n  - Use your knowledge about Slite.\n  - Each note in Slite is a guideline or knowledge.\n  - Each review is a note whose name follows the rule, \"[Client Name] - DD/MM/YYYY Weekly(Monthly) Update\".\n- All data is from Asana or Slite API. Also, each data has some additional fields.\n  - from: data from Asana or Slite\n  - client: array of clients that involve it\n  - type: \"general\" (general data), \"weekly\" (weekly reviews), \"monthly\" (monthly reviews) or \"client_spec\" (client-related data)\n  - date: the date that a review had been built\n- Your response must consist of two parts.\n  1. Important, detailed, and structured information for help with user to create a new review of today.\n     - Provide all information in details based on the given context.\n     - Prefer table and chart format.\n     - Provide reference tasks, reviews, or something for each information following it. e.g.\n        ```text\n       [INFORMATION]\n            Ref: Task: [GID], [NAME], [LINK]\n       ```\n       ```text\n       [INFORMATION]\n            Ref: Task: [GID], [NAME], [LINK]\n                 Review: [DATE], [LINK]\n       ```\n  2. Initial version of the new review of today.\n     - Provide reference tasks or reviews with detailed information and links for each term.\n     - Give the reason for why you suggest it for each term. e.g.\n        ```text\n       [SENTENCE]\n            Ref: Task: [GID], [NAME], [LINK]\n            Reason: [SENTENCE]\n       ```\n       ```text\n       [INFORMATION]\n            Ref: Task: [GID], [NAME], [LINK]\n                 Review: [DATE], [LINK]\n            Reason: [SENTENCE]\n       ```\n       ```text\n       [INFORMATION]\n            Ref: [GENERAL GUIDELINE]\n            Reason: [SENTENCE]\n       ```\n     - Follow the theme of provided past reviews in the context, such as icons, structure, and so on.\n     - **IMPORTANT** You must keep the structure, especially order of sections(such as 1. Highlight Section 🌟, 2. General KPI Section 📈, 3. Next Steps ⏩, 4. Last Week's Focus ⏪, 5. Post-Call Project Management 👨‍💻) specified in General Guidelines.\n- !IMPORTANT! Avoid using id and gids, instead use names.\n\n# To archive purpose, analyze the below context data first.\n**IMPORTANT** Focus on the RELATIONSHIP between tasks and reviews, especially datetime information such as created_at, completed_at, due_date, date, etc.\n\n**IMPORTANT** You must analyze KPI data in depth and comprehensively. And use the information from it directly and effectively in your work.\n\n## General Guidelines\nThis is General Guidelines to build Weekly or Monthly Review.\nThis outlines two key client review processes: a Weekly Review and a Monthly Review, designed to enhance project coordination, client communication, and strategic progress.\n\n{{ $input.all().map(item => item.json).toJsonString() }}\n\n## Client Data\nThis is data of the client.\n- gid: id of the client\n- website: website of the client \n- status: status of the client, archived or active\n- business_model: business model of the client\n- industry: industry of the client\n- service_category: service category that you serve to the client\n- description: description of the client\n- name: name of the client\n\n{{ $('Client Summary').first().json.message.content }}\n\n## Project Data\nThis is project data of the client from Asana API. It has some additional fields. \n- attachments: Array of attachments that belong to this project. These are from Asana API. \n\n{{ $('Clear Project Data').first().json.toJsonString() }}\n\n## Past Reviews\nThis is array of weekly reviews and monthly reviews that you built for the client.\nIn attributes field of each review, there are tags. These tags are marketing tools such as Google Search and Facebook Ads you used in the period of the review.\n### Weekly Reviews\n\n{{ $('Clear Weekly Reviews').all().map(item => item.json).toJsonString() }}\n\n### Monthly Reviews\n{{ $('Clear Monthly Reviews').all().map(item => item.json).toJsonString() }}\n\n## Tasks\nThis is array of Completed Tasks and Active Tasks of the client's project.\nEach task has tags. The tags are marketing tools such as Google Search and Facebook Ads that you use in the task.\nTasks And Reviews have strong relation.\nEach task has some additional fields.\n- attachments: Array of attachments that belong to task. These are from Asana API.\n- stories: Array of stories that belong to the task. These are from Asana API.\n### Completed Tasks\n{{ $('Clear Tasks').first().json.completed.toJsonString() }}\n\n### Active Tasks\n{{ $('Clear Tasks').first().json.active.toJsonString() }}\n\n# Base on the analysis of the all above information\n1. Generate important information for today's new review.\n2. Generate an initial version of the review so that expert can modify it with the information. Follow the structure noticed in general guidelines and past reviews."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        -740
+      ],
+      "id": "0326e888-b401-4e29-aafa-c339c41f4746",
+      "name": "Review Generator",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').first().json.chatInput }}",
+        "options": {
+          "systemMessage": "=# Identity\nYou are a talent marketing agent. You work on Asana and Slite. You have one client and one project of him.\nToday is **{{ $now }}** and you have to create a new task for this project on your past and future work for him.\n\n# Instructions\n\n- First, get important KPI data from google sheets of below urls one by one using the tool.\n\n  {{ $('Switch').first().json.output.attachments }}\n- Base on the description of the user about a new task.\n  - If any property of a task is provided in the description, use it without any modification.\n- All data is from Asana or Slite API, so use your basic knowledge about their response data format. Also, each data has some additional fields.\n  - from: data from Asana or Slite\n  - client: array of clients that involve it\n  - type: \"general\" (general data), \"weekly\" (weekly reviews), \"monthly\" (monthly reviews) or \"client_spec\" (client-related data)\n  - date: the date that a review had been built\n- Your response must consist of two parts\n  1.  Important, detailed, and structured information that is the basis of a new task.\n     - Provide all information in details based on the given context.\n     - Prefer table and chart format.\n     - Provide reference tasks, reviews, or something for each information following it. e.g.\n       ```text\n       [INFORMATION]\n            Ref: Task: [GID], [NAME], [LINK]\n            Description: The reason for why we consider it for a new task\n       ```\n       ```text\n       [INFORMATION]\n            Ref: Task: [GID], [NAME], [LINK]\n                 Review: [DATE], [LINK]\n            Description: The reason for why we consider it for a new task\n       ```\n  2. The new task, focus on its notes.\n     - Notes must follow the flow and structure of provided example tasks in context.\n     - Provide reference tasks or reviews with detailed information and links for each term.\n     - Give the reason for why you suggest it for each term. e.g.\n        ```text\n       [SENTENCE]\n            Ref: Task: [GID], [NAME], [LINK]\n            Reason: The reason for why we consider it for a new task\n       ```\n       ```text\n       [INFORMATION]\n            Ref: Task: [GID], [NAME], [LINK]\n                 Review: [DATE], [LINK]\n            Reason: The reason for why we consider it for a new task\n       ```\n       ```text\n       [INFORMATION]\n            Ref: [GENERAL GUIDELINE]\n                 [User specific data]\n            Reason: The reason for why we consider it for a new task\n       ```\n     - due_on must be date later than today or Null(i.e., no specific ending date)\n     - Determine all Custom Fields with real value or null (if unnecessary) based on the analyzation about the tasks.\n     - Determine the tags property of task, i.e., the array of marketing tools for this task. \n- !IMPORTANT! Avoid using id and gids, instead use names.\n- Here is a list of marketing tools that you can use.\n  * Google Search\n  * Google Shopping/pMax\n  * Facebook Ads\n  * Tracking and Analytics\n  * Bing Ads\n  * Reporting\n  * TikTok Ads\n  * DemandGen/YouTube\n  * Snapchat Ads\n  * Reddit Ads\n  * App Campaigns\n  * Email Marketing\n  * LPs, Funnels, CRO\n  * Display\n  * Native Ads\n  * Marketing Strategy\n  * Organic Social\n  * SEO\n  * Pinterest Ads\n  * Amazon Ads\n  * LinkedIn Ads\n  * Influencer Marketing\n  * Affiliate Marketing\n  * A/B Testing\n  * CRM & Lead Nurturing\n\n# To archive purpose, analyze the below context data first.\n**IMPORTANT** Focus on the RELATIONSHIP between tasks and reviews, especially datetime information such as created_at, completed_at, due_date, date, etc.\n\n**IMPORTANT** You must analyze KPI data in depth and comprehensively. And use the information from it directly and effectively in your work.\n\n## User's Description\n\n{description}\n\n## General Guidelines\n**Overarching Principle for Creative Requests:**\n*   **EVERY creative request MUST be logged as a task in Asana.**\n\n**I. When & How to Initiate Task Creation (Pre-Asana Steps):**\n\n1.  **Plan with Client (Step 1 - Creatives Request):**\n    *   Identify client needs (marketing calendar, promotions).\n    *   Educate client on asset delivery timelines (min. 1 day before designer starts).\n    *   Validate a micro-planning timeline.\n2.  **Gather & Upload Assets (Step 2 - Creatives Request & Ads Scripts Best Practices):**\n    *   Receive client assets ASAP.\n    *   Upload to the relevant Google Drive folder (e.g., \"gdrive / [xxx. Client Name] / Creative Material\").\n    *   If a script is needed:\n        *   Use **Image/Video Ad Script Templates** (Google Docs).\n        *   Follow naming format: `[INT] or [EXT] “date:DDMMYYYY” - “Client’s name” “Main theme of script” “Type of ad(Image or video)” script`.\n        *   Save scripts in the client's \"Ads Scripts Repository\" folder.\n        *   The script/brief itself should contain detailed visual guidelines, text, timing, format, inspiration, logo/font requirements, and links to specific stock assets if pre-selected (AdobeStock, MotionArray, Envato Elements – tag Sue for retrieval from Envato/MotionArray or if AdobeStock images are needed).\n3.  **Daily Review (Daily Project Management):**\n    *   At the start of each day, review Asana Inbox, Emails, and Slack for any new requests that need to be turned into Asana tasks.\n\n**II. Asana Task Creation – The Core Process:**\n\n1.  **Who Assigns & Where:**\n    *   **ALL Asana design tasks are assigned to Sue.** She then redirects to the correct designer.\n    *   Tasks are created in the **\"Design\" board** in Asana.\n    *   You can create the task (block the designer's calendar) even before receiving all assets if the slot is confirmed.\n    *   General tasks (non-client or internal marketing) go into \"White Marketing Tasks\" or team members' personal project boards.\n2.  **Task Creation - General Best Practices (How We Use Asana):**\n    *   **Assignee:** Sue (for design tasks).\n    *   **Projects:** Add to the relevant project (e.g., \"Design\" board, specific client board).\n    *   **Tags:** **Always add client tags.**\n    *   **Dependencies:** Add if the task relies on another.\n3.  **Task Content – What to Include (Crucial Checklist from \"Creatives Request\" & \"Ads Scripts Best Practices\"):**\n    *   **Title:** Clear and descriptive.\n    *   **Description (for others, use structure - How We Use Asana):**\n        *   **GOAL:** What you want to achieve.\n        *   **METHOD USED:** Bullet points with clear, actionable steps.\n        *   **FINAL OUTPUT:** What the final result should be.\n    *   **Deadline:** Clearly specified.\n    *   **Priority:** **Always include Low / Medium / High.**\n        *   **Low:** No impact if done a week later.\n        *   **Medium:** Can be done ~1-3 days after due date.\n        *   **High:** Urgent, needs completion by deadline. (For <1 week deadlines, ask Sue's confirmation in comments).\n    *   **Attachments/Links (Mandatory for Design Tasks):**\n        *   **Script/Brief:** Link to the filled-out Google Doc script/brief template (if applicable).\n        *   **Client Creative Assets:** Link to the Google Drive folder with all assets.\n        *   **Client Context and Guidelines:** Link to brand guidelines, PPC strategy, etc.\n        *   **Desired Output:** Link to any specific output requirements if not in script.\n        *   **Examples:** If available, share former Ads/Videos or competitor examples.\n        *   **Specifications:** Video/Image length, sizes, and target platforms.\n4.  **Timing & Lead Time for Design Tasks:**\n    *   **Asset Delivery:** Material should be provided to the designer **at least 1 day before** they start (ideally 3-4 days). Notify Sue ASAP if there are delays.\n    *   **Task Assignment Lead Time (General):** Assign tasks at least 2 days in advance, except for emergencies.\n    *   **Workload Consideration:** 1 Video ≈ 1 workday; 1 Banner Set ≈ 1 workday. Allow ~3 days for design creation (Ads Scripts Best Practices).\n5.  **Subtask Creation (for Scripts - \"Creatives Request\"):**\n    *   If the asset requires a script, create a **subtask within the main design task.**\n    *   **Assign the subtask to the Copywriter.**\n    *   **Subtask Content:** Should specify requirements for visual background guidelines, text, time, and contextual guidelines.\n    *   **Subtask Deadline:** Set ~3 days **EARLIER** than the main task's deadline (to allow your review).\n    *   **Requester's Responsibility:** **FUNDAMENTAL STEP** - Double-check the script and request corrections/adaptations from the copywriter.\n    *   Mark the copywriter's subtask as completed once the script is approved.\n    *   The designer will only start working on the main task once the script subtask is marked as done.\n6.  **Emergency Requests (when all designers are booked):**\n    *   Create the emergency request task in Asana.\n    *   Inform Sue & the marketing manager via Slack.\n    *   Options (to be discussed based on client value/priority):\n        *   An existing task is postponed, and Sue works on the emergency.\n        *   Sue delegates the emergency task to another designer.\n\nIn essence, task creation is a structured process starting with client planning, asset gathering, and script/brief preparation, culminating in a detailed Asana task assigned to Sue (for design) with all necessary information, links, priority, and deadlines clearly defined. Subtasks are used for scriptwriting to ensure clear handoffs.\n\n\n## Client Specific Data\nThis is the data related to the client.\n\n{{ $('Client Summary').first().json.message.content }}\n\n## Project Data\nThis is project data of the client from Asana API. It has some additional fields. \n- attachments: Array of attachments that belong to this project. These are from Asana API. \n\n{{ $('Clear Project Data').first().json.toJsonString() }}\n\n## Past Reviews\nThis is array of the last few weekly and monthly reviews that you built for the client.\nIn attributes field of each review, there are tags. These tags are marketing tools such as Google Search and Facebook Ads you used in the period of the review.\n\n### Weekly Reviews\n{{ $('Clear Weekly Reviews').all().map(item => item.json).toJsonString() }}\n\n### Monthly Reviews\n{{ $('Clear Monthly Reviews').all().map(item => item.json).toJsonString() }}\n\n## Tasks\nThis is array of Completed Tasks and Active Tasks of the client's project.\nEach task has tags. The tags are marketing tools such as Google Search and Facebook Ads that you use in the task.\nTasks And Reviews have strong relation.\n\n### Completed Tasks\n{{ $('Clear Tasks').first().json.completed.toJsonString() }}\n\n### Active Tasks\n{{ $('Clear Tasks').first().json.active.toJsonString() }}\n\n# Base on the analysis of the all above information\n1. Generate important information for new task creation based on provided information.\n2. Generate a new task.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        -480
+      ],
+      "id": "4a15469e-7f2a-4431-94ad-e1e1333aec68",
+      "name": "Task Generator"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  const review = item.json;\n  delete review._id;\n  delete review.content;\n  delete review.client;\n  delete review.from;\n  delete review.children;\n  delete review.id;\n}\n\nif ($('Switch').first().json.output.requirement === \"create_review\") {\n  return $input.all();\n} else {\n  return $input.all().slice(-5);\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        -740
+      ],
+      "id": "b5ff744b-eeb5-4a79-91dd-3c5304051a51",
+      "name": "Clear Monthly Reviews",
+      "executeOnce": false,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E",
+          "mode": "list",
+          "cachedResultName": "[CNF] Clients Mapping for AI Infrastructure",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 189042998,
+          "mode": "list",
+          "cachedResultName": "Asana Project IDs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit#gid=189042998"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Import",
+              "lookupValue": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        60,
+        -260
+      ],
+      "id": "9d1d4d5f-95ba-42d1-a8db-deafadc013a0",
+      "name": "Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bFkDqZ3E6eOSGj2R",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n  if (item.json[\"Project Name\"].startsWith($(\"Extract Topic\").first().json.output.client_id + \".\")) return [{'allow': false, 'client_id': $(\"Extract Topic\").first().json.output.client_id}]\n}\n\nreturn $(\"Extract Topic\").first().json;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        -260
+      ],
+      "id": "10bec00d-0e23-4010-80aa-2f592f7a980e",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -520,
+        640
+      ],
+      "id": "5c315b8f-b460-48bd-a87d-51be5e381fd1",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bfcb59d0-3e3b-477a-8a27-25c950e9a3fd",
+              "name": "gid",
+              "value": "={{ $json['Client ID'] }}",
+              "type": "string"
+            },
+            {
+              "id": "771bcb40-65b7-4037-a331-1ff372bccc23",
+              "name": "name",
+              "value": "={{ $json.Client }}",
+              "type": "string"
+            },
+            {
+              "id": "c5e012e9-484c-4768-8292-9c4f1a5ff861",
+              "name": "website",
+              "value": "={{ $json.Website }}",
+              "type": "string"
+            },
+            {
+              "id": "4beb1765-483c-4719-8c9a-a97700edb276",
+              "name": "status",
+              "value": "={{ $json.Status }}",
+              "type": "string"
+            },
+            {
+              "id": "11359c11-074f-4811-b9e0-c1debd52173f",
+              "name": "business_model",
+              "value": "={{ $json['Business Model'] }}",
+              "type": "string"
+            },
+            {
+              "id": "fa1e5bd3-278a-4735-a08e-d4fa291417b3",
+              "name": "industry",
+              "value": "={{ $json.Industry }}",
+              "type": "string"
+            },
+            {
+              "id": "a028231e-f2a3-4e68-9437-ec171bac4c28",
+              "name": "service_category",
+              "value": "={{ $json['Service Category'] }}",
+              "type": "string"
+            },
+            {
+              "id": "e0754a9a-839d-4d52-8cd3-10c31a86ecd8",
+              "name": "description",
+              "value": "={{ $json.Description }}",
+              "type": "string"
+            },
+            {
+              "id": "572cf2f8-0c39-4a51-8034-4a10b1851faa",
+              "name": "from",
+              "value": "Asana",
+              "type": "string"
+            },
+            {
+              "id": "301200de-ecf2-4b8d-8529-77fc07715314",
+              "name": "type",
+              "value": "client_spec",
+              "type": "string"
+            },
+            {
+              "id": "236b787d-eda2-42c1-b0d7-a610c4721c5a",
+              "name": "client",
+              "value": "=[\"{{ $json['Client ID'] }}\"]",
+              "type": "array"
+            },
+            {
+              "id": "105e67e9-9cdf-4e4b-af1c-9ed5c98b6b6c",
+              "name": "resource_type",
+              "value": "client",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -140,
+        560
+      ],
+      "id": "a1eea90c-5afb-4445-87fb-9be39704235d",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n    \"type\": \"object\",\n    \"properties\": {\n        \"requirement\": {\n            \"type\": \"string\",\n            \"description\": \"If the user requires to create new review, set \\\"create_review\\\", if requires to create new task, set \\\"create_task\\\", otherwise set \\\"other\\\"\",\n            \"enum\": [\"create_review\", \"create_task\", \"other\"]\n        },\n        \"client_id\": {\n            \"type\": \"string\",\n            \"description\": \"The focusing client id, three digits. It is necessary for the topic-generate_review and generate_task\"\n        },\n        \"attachments\": {\n            \"type\": \"array\",\n            \"items\": {\n              \"type\": \"string\",\n              \"description\": \"The url of data\"\n            },\n            \"description\": \"The urls of google sheet that are needed to create a new review or task.\"\n        }\n    },\n    \"required\": [\"requirement\"],\n    \"additionalProperties\": false\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        1000,
+        20
+      ],
+      "id": "b62becdd-3d38-466e-9933-b0a846276616",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "What is the user's requirement? And what is the client id on focus? Output as this schema.\n```json\n{\n  \"requirement\": string,\n  \"client_id\": string,\n  \"attachments\": [string]\n}\n```\n\n# Examples\n## Example 1\n\n**user** : Guidelines for creating new review.\n\n**output** : \n```json\n{\n  \"requirement\": \"other\"\n}\n```\n## Example 2\n\n**user** : \n    \n    Create new review for client 009. Here are some data.\n    https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?gid=0#gid=0\n    https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?gid=1477939757#gid=1477939757\n\n**output** : \n```json\n{\n  \"requirement\": \"create_review\",\n  \"client_id\": \"009\",\n  \"attachments\": [\n    \"https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?gid=0#gid=0\",\n    \"https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?gid=1477939757#gid=1477939757\"\n  ]\n}\n```\n## Example 3\n\n**user** : How can I create new task.\n\n**output** : \n```json\n{\n  \"requirement\": \"other\"\n}\n```\n## Example 4\n\n**user** : How many tasks belong to client 179?\n\n**output** : \n```json\n{\n  \"requirement\": \"other\"\n}\n```\n## Example 5\n\n**user** : \n\n    Create new task named \"123\" for client 162.\n    https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?gid=0#gid=0\n    https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?gid=189042998#gid=189042998\n\n**output** : \n```json\n{\n  \"requirement\": \"create_task\",\n  \"client_id\": \"162\",\n  \"attachments\": [\n    \"https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?gid=0#gid=0\",\n    \"https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?gid=189042998#gid=189042998\"\n  ]\n}\n```\n## Example 6\n\n**user** : Hello.\n\n**output** : \n```json\n{\n  \"requirement\": \"other\"\n}\n```\n\nIf there are no attachments in user message, you must ask for the user to add them.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        -260
+      ],
+      "id": "cff6fe66-95fd-405a-8639-79672dcc4863",
+      "name": "Extract Topic"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "163226a3-589c-4574-88c3-9285d48c87d0",
+              "leftValue": "={{ $('Code1').item.json.output.attachments }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1060,
+        -360
+      ],
+      "id": "a69b4451-3045-4f79-a790-4b8892ac18dc",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "url": "https://whitemarketing.onrender.com/update-slite",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -320,
+        740
+      ],
+      "id": "3f61d9bf-edb1-4e28-b2d4-474ea04bc004",
+      "name": "Update Slite Data"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.allow }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "exists",
+                      "singleValue": true
+                    },
+                    "id": "e9100a66-cd11-48f9-8e13-198b09f285eb"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Not Allow"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4d4eee94-601e-41bf-a2b3-d4c430db9c37",
+                    "leftValue": "={{ $json.output.requirement }}",
+                    "rightValue": "other",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notEquals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Creating Review or Task"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "679037bc-4436-4056-aa1e-325f235ba056",
+                    "leftValue": "={{ $json.output.requirement }}",
+                    "rightValue": "other",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "General"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        540,
+        -260
+      ],
+      "id": "b9f87343-9ab8-4726-9cb8-765894c578da",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1acfd3a3-5d20-4e0c-9d42-c9afa1351140",
+              "name": "output",
+              "value": "=Access to client {{ $json.client_id }} is not allowed.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        820,
+        -500
+      ],
+      "id": "dcd9034d-057b-4856-af88-28c813cfaa0e",
+      "name": "Exception Response (1)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e83dbcce-4797-46f5-a3a9-38550943af0c",
+              "name": "output",
+              "value": "Please provide KPI data URLs (Google Sheet).",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1420,
+        -420
+      ],
+      "id": "a7b6190f-0a48-444d-ab81-aa05f3212dc6",
+      "name": "Exception Response (2)"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $fromAI('document_url', `This the the url of document. The gid is always 0. It must follow this format: https://{...}?gid=0`, 'string') }}",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "={{ $fromAI('sheet_url', `This it the url of the sheet. Use the provided KPI urls directly. It must follow this format: https://{...}?gid={...}#gid={...}`, 'string') }}",
+          "mode": "url"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.6,
+      "position": [
+        2680,
+        -120
+      ],
+      "id": "3d63e7ba-a3bf-42e2-b474-aebd70fd86d7",
+      "name": "KPI Data",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bFkDqZ3E6eOSGj2R",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E",
+          "mode": "list",
+          "cachedResultName": "[CNF] Clients Mapping for AI Infrastructure",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Clients Tagging",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1C5DSQdxLy5sQQS6RXw6lutwgcESubIpsRbDFhRcuD3E/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        -320,
+        560
+      ],
+      "id": "882f39dc-8fb6-4731-9618-496f12e8f3a3",
+      "name": "Get Clients Data",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bFkDqZ3E6eOSGj2R",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "data",
+        "updateKey": "gid",
+        "fields": "gid,name,website,status,business_model,industry,service_category,description,from,type,client",
+        "upsert": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        60,
+        560
+      ],
+      "id": "804b18c9-16b3-4129-accb-91a4cacac9fd",
+      "name": "Update Clients Data",
+      "credentials": {
+        "mongoDb": {
+          "id": "UEEqvDmG9d2n3y2l",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.output }}\n\n## 3. Parent Note Ids\nWeekly: {{ $if($('Clear Weekly Reviews').first().json.keys().isNotEmpty(), $('Clear Weekly Reviews').first().json.parentNoteId, '') }}\nMonthly: {{ $if($('Clear Monthly Reviews').first().json.keys().isNotEmpty(), $('Clear Monthly Reviews').first().json.parentNoteId, '') }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n\"type\": \"object\",\n\"properties\": {\n    \"title\": {\n\n   \"type\": \"string\",\n\n   \"description\": \"The title of new review.\"},\n    \"markdown\": {\n\n   \"type\": \"string\",\n\n   \"description\": \"The content of the new review in markdown format.\"\n    },\n    \"parentNoteId\": {\n\n   \"type\": \"string\",\n\n   \"description\": \"The id of the parent note. - If the generated review is Weekly review, set \\\"parentNoteId\\\" parameter as the parentNoteId property of provided weekly reviews. - If the generated review is Monthly review, set \\\"parentNoteId\\\" parameter as the parentNoteId property of provided monthly reviews.\"\n    },\n    \"attributes\": {\n\n   \"type\": \"array\",\n\n   \"items\": {\n\n\n\"type\": \"string\"\n\n   },\n\n   \"description\": \"An array of the values for the attributes. First items is the date of new review, i.e., the date of today. Wrap it with quotes (\\\"\\\"). Second item is an array of marketing tool names combined with comma such as \\\"Google Search, Google Shopping/pMax, Bing Ads, Reporting, Tracking and Analytics\\\". Wrap it with quotes (\\\"\\\"). Third item is an array of the names of project's owners combined with comma such as the second value. Wrap it with quotes (\\\"\\\"). User names alway start with @ symbol. Examples 1: [\\\"2025-06-15\\\",\\\"Google Search, Bing Ads, Reporting, Facebook Ads, Display\\\",\\\"@Stefanie Heise, @Nina Mavali\\\"] Examples 2: [\\\"2023-01-05\\\",\\\"Reporting, Bing Ads, Display\\\",\\\"@Stefanie Heise\\\"] Examples 3: [\\\"2024-02-23\\\",\\\"Google Search\\\",\\\"Stefanie Heise, @Nina Mavali\\\"]\"\n    }\n},\n\"required\": [\"title\", \"markdown\", \"parentNoteId\", \"attributes\"],\n\"additionalProperties\": false }",
+        "options": {
+          "systemPromptTemplate": "You are an expert extraction algorithm.\nThe input consists of three parts, first is the information , the second is an initial version of the new review and the third is the parent note ids for weekly and monthly.\nOnly extract relevant information from the text. You must extract information from the second and third part of the input.\nIf you do not know the value of an attribute asked to extract, you may omit the attribute's value."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.1,
+      "position": [
+        2580,
+        -740
+      ],
+      "id": "0136380e-c055-4a18-a87c-e6c5c67bc272",
+      "name": "Information Extractor"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.slite.com/v1/notes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2940,
+        -740
+      ],
+      "id": "7b9c2cd6-5017-4bff-b485-611c0635df2e",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "WNKPGFdqkfTo9NhH",
+          "name": "Bearer Auth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "28fedbb9-521b-43d2-b1b1-1088a7f80934",
+              "name": "output",
+              "value": "=Saved New Review URL: {{ $json.url }}\n\n{{ $('Review Generator').item.json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3160,
+        -740
+      ],
+      "id": "185e39dc-3776-4e45-87a2-ae448f703c35",
+      "name": "Final Output for Review Creating"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Extract Topic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Review Generator",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Task Generator",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Extract Topic",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Information Extractor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Review Generator",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Task Generator",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Extract Topic",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "ai_tool": [
+        []
+      ],
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mongo Aggregation": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mongo Search": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Pinecone Search Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB": {
+      "main": [
+        []
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "MongoDB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Client": {
+      "main": [
+        [
+          {
+            "node": "Get Client Spec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Client Spec": {
+      "main": [
+        [
+          {
+            "node": "Client Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Project": {
+      "main": [
+        [
+          {
+            "node": "Clear Project Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Weekly Reviews": {
+      "main": [
+        [
+          {
+            "node": "Clear Weekly Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Monthly Reviews": {
+      "main": [
+        [
+          {
+            "node": "Clear Monthly Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tasks": {
+      "main": [
+        [
+          {
+            "node": "Clear Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Project Data": {
+      "main": [
+        [
+          {
+            "node": "Get Weekly Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Weekly Reviews": {
+      "main": [
+        [
+          {
+            "node": "Get Monthly Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Tasks": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Get Review Guidelines",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Task Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Client Summary": {
+      "main": [
+        [
+          {
+            "node": "Get Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Review Guidelines": {
+      "main": [
+        [
+          {
+            "node": "Review Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Monthly Reviews": {
+      "main": [
+        [
+          {
+            "node": "Get Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets1": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Clients Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Slite Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Update Clients Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Extract Topic",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Topic": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Get Client",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exception Response (2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Exception Response (1)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KPI Data": {
+      "ai_tool": [
+        [
+          {
+            "node": "Review Generator",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Task Generator",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Clients Data": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Generator": {
+      "main": [
+        [
+          {
+            "node": "Information Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Extractor": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Final Output for Review Creating",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "88732842-cad4-4907-9554-1167a4b87a06",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d22da90d40d18d6d2cb57c29abe6f5377f1f0f12d649d697e2f88a66458bfdbb"
+  },
+  "id": "7I6g4B7VIhoWgZxI",
+  "tags": []
+}

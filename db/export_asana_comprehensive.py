@@ -27,6 +27,7 @@ from pinecone import Pinecone, ServerlessSpec
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from openai import OpenAI
+from requests import request
 from tqdm import tqdm
 from config import pinecone_info, mongo_info
 
@@ -1021,6 +1022,7 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
                     if resource_type == 'project':
                         sync = ''
                         try:
+                            request("get", f"https://whitemarketing.onrender.com/establish-webhook/{gid}")
                             api_response = asana.EventsApi(api_client).get_events(gid, {}, full_payload=True)
                         except ApiException as e:
                             sync = json.loads(e.body)["sync"]
