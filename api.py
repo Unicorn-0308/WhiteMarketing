@@ -242,7 +242,8 @@ async def establish_webhook(gid: str, request: Request, response: Response):
             }
 
         summary = {
-            'status': 'completed'
+            'status': 'completed',
+            'webhook_info': webhook_info
         }
 
         log_info(f"API: Establish-webhooks completed. Success: {gid}")
