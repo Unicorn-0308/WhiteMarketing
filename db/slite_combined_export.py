@@ -29,22 +29,6 @@ from config import mongo_info, pinecone_info
 # Configuration
 SLITE_API_TOKEN = os.environ['SLITE_API_TOKEN']
 LLAMA_PARSE_API_KEY = [
-    # "llx-VPiwAq8eTr99UCfbhINfcds37DcJ5HrxlT0WeHiMQycOiEEP",
-    # "llx-9PEfzqG66yUb5uTp9wjAFMfpDVc2Z6Oc1u2P2tCRHC1rO5uY",
-    # "llx-cxmsp0FTaJhFoeeCH4zJgs6UQg1x3gIhzPVx44Dm7vNboBbf",
-    # "llx-HyVeAJ2yFTnzvZfSl0pDykBYAaTQlHHsexruf36BrqdvkrpT",
-    # "llx-bQZvsP5szl3niPfouWK6ta8tXRLduaZNizyKaXhAEhxZFKsy",
-    # "llx-DZjNxViowtDKtUINBMtCz6BjYWg5DKufJdeZhZTjDWR6OEF1",
-    # "llx-htInYFGncqyVH3fB1rSQBqJSLjhFYcivQoihX8ACVF98V41k",
-    # "llx-CQHgOBDORB0JqkFxMO6zNGQqdgD0f2uA1gyutayAt8pTeY7U",
-    # "llx-KK9s90oqAudZyuaEQbnGcqeY8NhN1i6Zfl6vx8DXwZMGboWe",
-    # "llx-QV2Yq5zqpBdxQEXU6saeZZl4ARb17asG3GjrOgT5GD06Jb3t",
-    # "llx-apGKkOLQU79oFOo1urFipPevqiQDDe1WRfCbbLVENnjNrb3S",
-    "llx-FguSkV0asQxnZHLIHCR2zRNce0oeJPYF1wczk3jo2a4LRcOb",
-    "llx-bN9Eemg2hldEdqquqTD5x2FsjwFk4K19TAss4eV1Nppoca8O",
-    "llx-YQC7Uyyjvlmi70yngfTnOav3lp5kFX8sekskGbQ42yiM7qTD",
-    "llx-T90rpo8jASP8xNBQvYAk8pi4VK2O594lEpgbhsIUW2KgbgVU",
-    "llx-CFmurfB4y29wAbt9lLkrB1E1v4FZeYgu9IqBr9pzDkafGdQG",
     "llx-EIMgSco30xEi3lTt6B71TpHk8LCoTGWEPvy4tSPRFwdTK82Y",
     "llx-DKJwZFD5RMGP071UzwWwRy2lX5ARqS779FaW5COqNO3gYbAv",
     "llx-GYkJfCw4LQgeIyUiBNGe1EVh7kcjLR1OYYEBa4ExEynQx5c1",
@@ -64,7 +48,23 @@ LLAMA_PARSE_API_KEY = [
     "llx-Bmebz35LhtLTw2zFEV3s9G1QkKpSKmxnCzbFaKnhdCjYaVID",
     "llx-gpl5WbyHtth6SlL5HkKivUH1A3hWqVkN5XqYSlrHcqNwbvcg",
     "llx-CGLvq2jNTJVhUSZ2ziMBdqWmoPGQStyjex7kqr4gcPZQq4QY",
-    "llx-9yTFUTZ7ok0jKsJcP2x3ZG5kCpX3zKnPuww3RZ2tC9PXWsJH"
+    "llx-9yTFUTZ7ok0jKsJcP2x3ZG5kCpX3zKnPuww3RZ2tC9PXWsJH",
+    "llx-VPiwAq8eTr99UCfbhINfcds37DcJ5HrxlT0WeHiMQycOiEEP",
+    "llx-9PEfzqG66yUb5uTp9wjAFMfpDVc2Z6Oc1u2P2tCRHC1rO5uY",
+    "llx-cxmsp0FTaJhFoeeCH4zJgs6UQg1x3gIhzPVx44Dm7vNboBbf",
+    "llx-HyVeAJ2yFTnzvZfSl0pDykBYAaTQlHHsexruf36BrqdvkrpT",
+    "llx-bQZvsP5szl3niPfouWK6ta8tXRLduaZNizyKaXhAEhxZFKsy",
+    "llx-DZjNxViowtDKtUINBMtCz6BjYWg5DKufJdeZhZTjDWR6OEF1",
+    "llx-htInYFGncqyVH3fB1rSQBqJSLjhFYcivQoihX8ACVF98V41k",
+    "llx-CQHgOBDORB0JqkFxMO6zNGQqdgD0f2uA1gyutayAt8pTeY7U",
+    "llx-KK9s90oqAudZyuaEQbnGcqeY8NhN1i6Zfl6vx8DXwZMGboWe",
+    "llx-QV2Yq5zqpBdxQEXU6saeZZl4ARb17asG3GjrOgT5GD06Jb3t",
+    "llx-apGKkOLQU79oFOo1urFipPevqiQDDe1WRfCbbLVENnjNrb3S",
+    "llx-FguSkV0asQxnZHLIHCR2zRNce0oeJPYF1wczk3jo2a4LRcOb",
+    "llx-bN9Eemg2hldEdqquqTD5x2FsjwFk4K19TAss4eV1Nppoca8O",
+    "llx-YQC7Uyyjvlmi70yngfTnOav3lp5kFX8sekskGbQ42yiM7qTD",
+    "llx-T90rpo8jASP8xNBQvYAk8pi4VK2O594lEpgbhsIUW2KgbgVU",
+    "llx-CFmurfB4y29wAbt9lLkrB1E1v4FZeYgu9IqBr9pzDkafGdQG",
 ]
 llama_key_index = 0
 MONGODB_URI = mongo_info["url"]
