@@ -172,9 +172,9 @@ async def establish_webhook(gid: str, request: Request, response: Response):
 
         webhooks_api = asana.WebhooksApi(api_client)
 
-        if 'webhook' in resource and 'gid' in resource['webhook']:
+        if 'webhook_info' in resource and 'gid' in resource['webhook_info']:
             try:
-                webhooks_api.delete_webhook(resource["webhook"]["gid"])
+                webhooks_api.delete_webhook(resource["webhook_info"]["gid"])
             except Exception as e:
                 log_error("Error while deleting old webhook", e)
 
