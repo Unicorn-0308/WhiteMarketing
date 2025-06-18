@@ -828,8 +828,8 @@ async def main():
         
         # Step Two: Process client channel
         log_info("\n=== STEP TWO: Processing Client Channel ===")
-        for id in CLIENT_CHANNEL:
-            await process_client_channel(headers, id)
+        # for id in CLIENT_CHANNEL:
+        await process_client_channel(headers, CLIENT_CHANNEL[0])
         
         log_info("\n=== EXPORT AND UPSERT PROCESS COMPLETED SUCCESSFULLY ===")
         
