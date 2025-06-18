@@ -1013,26 +1013,27 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
                     # Add metadata fields
                     full_data = add_metadata_fields(full_data, parent_clients)
                     
-                    with lock:
-                        space[resource_type][gid] = full_data
-                        if resource_type not in space.get('updated', []):
-                            space.setdefault('updated', []).append(resource_type)
-                    
                     # Upsert to databases automatically
                     # if index_model is not None and collection is not None:
                     if resource_type == 'project':
                         sync = ''
                         try:
                             if resource:
-                                webhook_info = resource.get('webhook_info', {})
+                                webhook_info = resource.get('webhook_info')
                             else:
-                                webhook_info = request("get", f"https://whitemarketing.onrender.com/establish-webhook/{gid}").json().get('webhook_info', {})
+                                webhook_info = request("get", f"https://whitemarketing.onrender.com/establish-webhook/{gid}").json().get('webhook_info')
                             full_data.update({'webhook_info': webhook_info})
                             api_response = asana.EventsApi(api_client).get_events(gid, {}, full_payload=True)
                         except ApiException as e:
                             sync = json.loads(e.body)["sync"]
                             full_data['sync'] = sync
+                        log_info(f"\n{json.dumps(full_data, indent=4)}")
                     sync_upsert_data(full_data, index_model, collection, resource_type)
+
+                    with lock:
+                        space[resource_type][gid] = full_data
+                        if resource_type not in space.get('updated', []):
+                            space.setdefault('updated', []).append(resource_type)
                     
                     # Recursively process nested data
                     for key in full_data:
@@ -1151,7 +1152,7 @@ def sync_upsert_data(data, index_model, collection, resource_type):
     mongodb_success = upsert_to_mongodb(data, collection, resource_type)
     
     if pinecone_success and mongodb_success:
-        log_info(f"Successfully upserted {resource_type} {data.get('gid')} to both databases")
+        log_info(f"Successfully upserted {resource_type} {data.get('gid')} to both databases\n{json.dumps(data, indent=4)}")
     elif pinecone_success:
         log_error(f"Upserted to Pinecone only: {resource_type} {data.get('gid')}")
     elif mongodb_success:
