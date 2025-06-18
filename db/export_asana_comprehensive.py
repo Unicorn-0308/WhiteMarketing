@@ -1029,7 +1029,6 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
                             sync = json.loads(e.body)["sync"]
                             full_data['sync'] = sync
                             log_info(str(e))
-                        log_info(f"\n{json.dumps(full_data, indent=4)}")
                     sync_upsert_data(full_data, index_model, collection, resource_type)
 
                     with lock:
@@ -1154,7 +1153,7 @@ def sync_upsert_data(data, index_model, collection, resource_type):
     mongodb_success = upsert_to_mongodb(data, collection, resource_type)
     
     if pinecone_success and mongodb_success:
-        log_info(f"Successfully upserted {resource_type} {data.get('gid')} to both databases\n{json.dumps(data, indent=4)}")
+        log_info(f"Successfully upserted {resource_type} {data.get('gid')} to both databases")
     elif pinecone_success:
         log_error(f"Upserted to Pinecone only: {resource_type} {data.get('gid')}")
     elif mongodb_success:

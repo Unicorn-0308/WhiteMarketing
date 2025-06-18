@@ -92,6 +92,24 @@ async def export_all(response: Response):
         }
 
 
+@app.get('/delete-all/{workspace_gid}')
+async def delete_all(workspace_gid: str, response: Response):
+    try:
+        log_info("API: Starting to delete all webhooks")
+        webhooks_api = asana.WebhooksApi(api_client)
+        webhooks = webhooks_api.get_webhooks(workspace_gid, {})
+
+        for webhook in webhooks:
+            webhooks_api.delete_webhook(webhook.get("gid"))
+            log_info(f"Successfully deleted webhook {webhook.get('gid')}")
+
+        return {
+            "status": "success",
+        }
+
+    except Exception as e:
+        log_error("API: Failed to delete all webhooks", e)
+
 @app.get('/establish-all')
 async def establish_all(response: Response):
     try:
@@ -178,6 +196,12 @@ async def establish_webhook(gid: str, request: Request, response: Response):
             except Exception as e:
                 log_error("Error while deleting old webhook", e)
 
+        if 'webhook' in resource and 'gid' in resource['webhook']:
+            try:
+                webhooks_api.delete_webhook(resource["webhook"]["gid"])
+            except Exception as e:
+                log_error("Error while deleting old webhook", e)
+
         try:
             # Create webhook target URL
             webhook_url = f"{server_url}webhook/{gid}"
@@ -230,7 +254,7 @@ async def establish_webhook(gid: str, request: Request, response: Response):
 
             global_exporter.collection.update_one(
                 {'gid': gid},
-                {'$set': {'webhook': webhook_info}}
+                {'$set': {'webhook_info': webhook_info}}
             )
 
             log_info(f"API: Successfully established webhook for resource {gid}")
@@ -294,7 +318,7 @@ async def webhook_handler(gid: str, request: Request, response: Response):
             }
 
         # Get webhook info
-        webhook_info = resource.get('webhook')
+        webhook_info = resource.get('webhook_info')
         if not webhook_info:
             log_error(f"API: No webhook info found for resource {gid}")
             response.status_code = status.HTTP_400_BAD_REQUEST
