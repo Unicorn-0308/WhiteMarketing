@@ -1005,7 +1005,8 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
         if resource_type not in space:
             space[resource_type] = {}
 
-        if not collection.find_one({"gid": gid}) or first:
+        resource = collection.find_one({"gid": gid})
+        if not resource or first:
             try:
                 full_data = DATA_FETCHERS[resource_type](gid)
                 if full_data:
@@ -1022,7 +1023,10 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
                     if resource_type == 'project':
                         sync = ''
                         try:
-                            webhook_info = request("get", f"https://whitemarketing.onrender.com/establish-webhook/{gid}").json().get('webhook_info', {})
+                            if resource:
+                                webhook_info = resource.get('webhook_info', {})
+                            else:
+                                webhook_info = request("get", f"https://whitemarketing.onrender.com/establish-webhook/{gid}").json().get('webhook_info', {})
                             full_data.update({'webhook_info': webhook_info})
                             api_response = asana.EventsApi(api_client).get_events(gid, {}, full_payload=True)
                         except ApiException as e:
