@@ -12,6 +12,7 @@ try:
     client.admin.command('ismaster')
     print("MongoDB connection successful!")
     mongo = client[mongo_info["database"]][mongo_info["collection"]]
+    mongo_ = client[mongo_info["database"]]["n8n"]
 except ConnectionFailure:
     print("MongoDB connection failed!")
     sys.exit(1)
