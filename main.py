@@ -87,11 +87,13 @@ My name is Nathan. How can I assist you today?"""
                 execution = response.json()
 
                 result = {}
+                out = 0
                 while True:
                     result = mongo_.find_one({"id": execution["id"]})
-                    if result:
+                    if result or out > 60:
                         break
                     time.sleep(5)
+                    out += 1
                 st.markdown(result.get("output", ""), unsafe_allow_html=True)
                 st.session_state.messages.append({"role": "assistant", "content": result.get("output", "")})
                 mongo_.delete_one({"id": execution["id"]})
