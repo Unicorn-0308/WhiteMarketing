@@ -94,9 +94,13 @@ My name is Nathan. How can I assist you today?"""
                         break
                     time.sleep(5)
                     out += 1
-                st.markdown(result.get("output", ""), unsafe_allow_html=True)
-                st.session_state.messages.append({"role": "assistant", "content": result.get("output", "")})
-                mongo_.delete_one({"id": execution["id"]})
 
-                st.rerun()
+                try:
+                    st.markdown(result.get("output", ""), unsafe_allow_html=True)
+                    st.session_state.messages.append({"role": "assistant", "content": result.get("output", "")})
+                    mongo_.delete_one({"id": execution["id"]})
+                    st.rerun()
+                except Exception as e:
+                    st.markdown(str(e), unsafe_allow_html=True)
+
 
