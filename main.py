@@ -49,6 +49,7 @@ My name is Nathan. How can I assist you today?"""
     with st.sidebar:
         if st.button("Clear Chat History", use_container_width=True, type="primary"):
             st.session_state.messages = []
+            st.session_state.sessionId = uuid.uuid4()
             st.rerun()
 
     # Display existing messages
