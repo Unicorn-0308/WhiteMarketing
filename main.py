@@ -63,8 +63,8 @@ My name is Nathan. How can I assist you today?"""
         if prompt.text:
         # if prompt := st.chat_input("What are you curious about?"):
             with st.chat_message("user", avatar="🤵"):
-                st.markdown(prompt, unsafe_allow_html=True)
-            st.session_state.messages.append({"role": "user", "content": prompt})
+                st.markdown(prompt.text, unsafe_allow_html=True)
+            st.session_state.messages.append({"role": "user", "content": prompt.text})
 
             with st.chat_message("assistant", avatar="🤖"):
                 with st.spinner("The assistant is thinking..."):
