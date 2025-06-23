@@ -1023,7 +1023,7 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
                             else:
                                 webhook_info = request("get", f"https://whitemarketing.onrender.com/establish-webhook/{gid}").json().get('webhook_info')
                             full_data.update({'webhook_info': webhook_info})
-                            log_info(f"establish, {json.dumps(webhook_info, indent=4)}")
+                            # log_info(f"establish, {json.dumps(webhook_info, indent=4)}")
                             api_response = asana.EventsApi(api_client).get_events(gid, {}, full_payload=True)
                         except ApiException as e:
                             sync = json.loads(e.body)["sync"]
