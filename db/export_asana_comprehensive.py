@@ -989,7 +989,7 @@ def add_metadata_fields(data, parent_clients=None, collection=None):
         data["client"] = [extract_client_id(pro.get("name", "000."))[0] for pro in data.get("projects", [])]
         if data["parent"] and data["parent"]["resource_type"] == "task":
             parent = collection.find_one({"gid": data["parent"]["gid"]})
-            data["client"].extend(parent.get("clients", []))
+            data["client"].extend(parent.get("client", []))
 
     return data
 
