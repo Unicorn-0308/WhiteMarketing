@@ -986,7 +986,7 @@ def add_metadata_fields(data, parent_clients=None):
     elif resource_type in ["section", "story"] and parent_clients:
         data["client"].extend(parent_clients)
     elif resource_type == "task":
-        data["client"] = [extract_client_id(pro.get("name", "000. dfdf")) for pro in data.get("projects", [])]
+        data["client"] = [extract_client_id(pro.get("name", "000."))[0] for pro in data.get("projects", [])]
 
     return data
 
