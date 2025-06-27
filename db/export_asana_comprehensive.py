@@ -964,7 +964,7 @@ def convert_datetime_fields(data):
     
     return data
 
-def add_metadata_fields(data, parent_clients=None):
+def add_metadata_fields(data, parent_clients=None, collection=None):
     """Add required metadata fields to data."""
     if not isinstance(data, dict):
         return data
@@ -987,6 +987,9 @@ def add_metadata_fields(data, parent_clients=None):
         data["client"].extend(parent_clients)
     elif resource_type == "task":
         data["client"] = [extract_client_id(pro.get("name", "000."))[0] for pro in data.get("projects", [])]
+        if data["parent"] and data["parent"]["resource_type"] == "task":
+            parent = collection.find_one({"gid": data["parent"]["gid"]})
+            data["client"].extend(parent.get("clients", []))
 
     return data
 
@@ -1015,7 +1018,7 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
                         full_data['client'] = m.get('client', [])
                     else:
                         full_data['client'] = []
-                    full_data = add_metadata_fields(full_data, parent_clients)
+                    full_data = add_metadata_fields(full_data, parent_clients, collection)
                     
                     # Upsert to databases automatically
                     # if index_model is not None and collection is not None:
