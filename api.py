@@ -43,7 +43,7 @@ def process_event(event):
         if event_info['parent']:
             parent = global_exporter.collection.find_one({"gid": event_info["parent"]})
             try:
-                parent_clients = parent.get('clients', [])
+                parent_clients = parent.get('client', [])
             except:
                 parent_clients = []
         else:
