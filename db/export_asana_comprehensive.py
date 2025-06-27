@@ -982,12 +982,12 @@ def add_metadata_fields(data, parent_clients=None):
     # Add "client" field
     if resource_type == "project":
         project_name = data.get("name", "")
-        data["client"] = extract_client_id(project_name)
-    elif resource_type in ["task", "section", "story"] and parent_clients:
-        data["client"] = parent_clients
-    else:
-        data["client"] = []
-    
+        data["client"].extend(extract_client_id(project_name))
+    elif resource_type in ["section", "story"] and parent_clients:
+        data["client"].extend(parent_clients)
+    elif resource_type == "task":
+        data["client"] = [extract_client_id(pro.get("name", "000. dfdf")) for pro in data.get("projects", [])]
+
     return data
 
 def expand_data(data, space, parent_clients=None, index_model=None, collection=None, first=False):
@@ -1011,6 +1011,10 @@ def expand_data(data, space, parent_clients=None, index_model=None, collection=N
                 full_data = DATA_FETCHERS[resource_type](gid)
                 if full_data:
                     # Add metadata fields
+                    if m := collection.find_one({"gid": gid}):
+                        full_data['client'] = m.get('client', [])
+                    else:
+                        full_data['client'] = []
                     full_data = add_metadata_fields(full_data, parent_clients)
                     
                     # Upsert to databases automatically
