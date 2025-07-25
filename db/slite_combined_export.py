@@ -416,7 +416,8 @@ async def get_doc(doc_gid: str, headers, client=[], type_="general", s_format="%
 
         need_update = True
         mongo_self = list(mongo_collection.find({"id": doc_gid}))
-        if len(mongo_self) and mongo_self[0]["updatedAt"].replace(tzinfo=timezone.utc) >= datetime.datetime.fromisoformat(doc_self['updatedAt']):
+        # if len(mongo_self) and mongo_self[0]["updatedAt"].replace(tzinfo=timezone.utc) >= datetime.datetime.fromisoformat(doc_self['updatedAt']):
+        if len(mongo_self):
             need_update = False
 
         if need_update:
@@ -621,7 +622,8 @@ async def process_client_channel(headers, id):
         need_update = True
         mongo_self = list(mongo_collection.find({"id": id}))
         print(mongo_self[0]["updatedAt"].replace(tzinfo=timezone.utc), datetime.datetime.fromisoformat(channel_doc['updatedAt']))
-        if len(mongo_self) and mongo_self[0]["updatedAt"].replace(tzinfo=timezone.utc) >= datetime.datetime.fromisoformat(channel_doc['updatedAt']):
+        # if len(mongo_self) and mongo_self[0]["updatedAt"].replace(tzinfo=timezone.utc) >= datetime.datetime.fromisoformat(channel_doc['updatedAt']):
+        if len(mongo_self):
             need_update = False
 
         if need_update:
